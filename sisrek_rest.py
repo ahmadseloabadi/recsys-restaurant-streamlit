@@ -491,7 +491,7 @@ def add_ratings(baris, i, j,menu):
                     st.session_state[f'ratings_to_save_{menu}'].append((baris, user_rating))
                     st.toast(f"Rating {user_rating} untuk {baris[2]}!", icon='✅')
                 time.sleep(2)
-                st.experimental_rerun()
+                st.rerun()
         # Tambahkan opsi untuk menghapus rating
         if f'ratings_to_save_{menu}' in st.session_state:
             for index, (saved_row, saved_rating) in enumerate(st.session_state[f'ratings_to_save_{menu}']):
@@ -500,7 +500,7 @@ def add_ratings(baris, i, j,menu):
                         st.session_state[f'ratings_to_save_{menu}'].pop(index)
                         st.toast(f"Rating {user_rating} untuk {saved_row[2]} dihapus!", icon='❌')
                         time.sleep(2)
-                        st.experimental_rerun()
+                        st.rerun()
                     break
 
 def save_ratings(user_id, ratings_df, df_places_to_eat, result_name,menu):
@@ -532,7 +532,7 @@ def save_ratings(user_id, ratings_df, df_places_to_eat, result_name,menu):
         
         st.toast("Semua rating telah disimpan!", icon='✅')
         time.sleep(2)
-        st.experimental_rerun()
+        st.rerun()
     else:
         st.toast("Tidak ada rating untuk disimpan.", icon='⚠️')
 
@@ -540,7 +540,7 @@ def delete_rating(menu):
     st.session_state[f'ratings_to_save_{menu}'] = []
     st.toast("Semua rating telah dihapus!", icon='❌')
     time.sleep(2)
-    st.experimental_rerun()
+    st.rerun()
 
 def delete_user_rating(user_id, restaurant_name):
     # Cari indeks rating yang cocok di DataFrame
