@@ -44,7 +44,7 @@ def create_users_from_ratings():
 
     # **Tambahkan Admin Secara Manual (Jika Belum Ada)**
     admin_data = pd.DataFrame({
-        'user_id': ['admin'],
+        'user_id': [0],
         'nama': ['admin'],
         'password': Hasher(["admin123"]).generate(),  # Password admin123 (hashed)
         'role': ['admin']

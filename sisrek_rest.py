@@ -79,7 +79,7 @@ def login():
 
     for _, row in users_df.iterrows():
         credentials["usernames"][str(row["user_id"])] = {
-            "nama": row["nama"],
+            "name": row["nama"],
             "password": row["password"],
             "role": row["role"]
         }
@@ -92,7 +92,7 @@ def login():
         cookie_expiry_days=30
     )
 
-    authentication_status, username = authenticator.login(fields={"Username": "User ID"})
+    name, authentication_status, username = authenticator.login(fields={"Username": "User ID"})
 
     if authentication_status:
         
