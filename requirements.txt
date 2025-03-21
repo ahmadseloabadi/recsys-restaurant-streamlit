@@ -1,5 +1,4 @@
 gspread==6.2.0
-numpy==2.2.4
 recmetrics==0.1.5
 matplotlib==3.9.0
 nltk==3.8.1
