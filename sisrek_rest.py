@@ -21,13 +21,11 @@ from collections import defaultdict, OrderedDict
 import matplotlib.pyplot as plt
 import plotly.express as px
 
-import yaml
-from yaml.loader import SafeLoader
-import os   
 import time
 import base64
 
 import recmetrics
+from google_sheets import load_data, update_data ,load_users, register_user
 
 stopwords_list=stopwords.words('indonesian')
 porter = PorterStemmer()
@@ -45,20 +43,21 @@ st.set_page_config(page_title="restaurant recomendation", page_icon=f"data:image
 # Memuat dataset
 
 def load_dataset():
-    places_to_eat = pd.read_csv('data/dataset/places_to_eat_in_the_jogja_region.csv')
+    places_to_eat = load_data("places_to_eat")
+    ratings = load_data("ratings")
+
     places_to_eat['Rating Toko'] = places_to_eat['Rating Toko'].round().clip(1, 5)
+
     if 'restaurant_id' not in places_to_eat.columns:
-        places_to_eat.insert(0,'restaurant_id',places_to_eat.index)
-        places_to_eat.to_csv('data/dataset/places_to_eat_in_the_jogja_region.csv',index=False)
+        places_to_eat.insert(0, 'restaurant_id', places_to_eat.index)
 
-    ratingss = pd.read_csv('data/dataset/ratings_restaurant.csv')
-    ratings_new = ratingss.merge(places_to_eat[['restaurant_id', 'Nama Restoran']], on='Nama Restoran', how='left',suffixes=['',"_y"])
-    ratings  =ratings_new[['user_id','nama','domisili','Nama Restoran','restaurant_id','rating']]
-    ratings.to_csv('data/dataset/ratings_restaurant.csv',index=False)
-    data_merge = pd.merge(ratings, places_to_eat, on='Nama Restoran')
-    return ratings, places_to_eat ,data_merge
+    ratings_new = ratings.merge(places_to_eat[['restaurant_id', 'Nama Restoran']], on='Nama Restoran', how='left', suffixes=['', "_y"])
+    ratings = ratings_new[['user_id', 'nama', 'domisili', 'Nama Restoran', 'restaurant_id', 'rating']]
 
-ratingss , places_to_eat,data_merge=load_dataset()
+    return ratings, places_to_eat
+
+ratingss, places_to_eat = load_dataset()
+
 restaurant=places_to_eat.copy()
 rating=ratingss.copy()
 ratings = rating.dropna(subset=['restaurant_id'])
@@ -68,32 +67,37 @@ rating['user_id'] = rating['user_id'].astype(str)
 ratings['user_id'] = ratings['user_id'].astype(str)
 ratings['rating'] = ratings['rating'].astype(int)
 
-# dilte path konfigurasi yaml
-CONFIG_PATH = 'config.yaml'
+# Konfigurasi autentikasi dari Google Sheets
+def login():
+    users_df = load_users()
+    credentials = {"usernames": {}}
 
-# Fungsi untuk memuat konfigurasi yaml
-def load_config():
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, 'r') as file:
-            return yaml.load(file, Loader=SafeLoader)
-    else:
-        return {'credentials': {'usernames': {}}, 'cookie': {'expiry_days': 30, 'key': 'random_key', 'name': 'auth_cookie'}, 'preauthorized': {}}
-# Fungsi untuk menyimpan konfigurasi yaml
+    for _, row in users_df.iterrows():
+        credentials["usernames"][str(row["user_id"])] = {
+            "name": row["name"],
+            "password": row["password"],
+            "role": row["role"]
+        }
 
-def save_config(config):
-    with open(CONFIG_PATH, 'w') as file:
-        yaml.dump(config, file, default_flow_style=False)
+    global authenticator  # Buat objek global agar bisa digunakan di logout
+    authenticator = stauth.Authenticate(
+        credentials,
+        "auth_cookie",
+        "random_key",
+        cookie_expiry_days=30
+    )
 
-# Memuat atau membuat konfigurasi authenticator
-config = load_config()
+    name, authentication_status, username = authenticator.login(fields={"Username": "User ID"})
 
-# Inisialisasi authenticator
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
-)
+    if authentication_status:
+        
+        return username, credentials["usernames"][username]["role"]
+    elif authentication_status == False:
+        st.error("User ID atau password salah.")
+    elif authentication_status == None:
+        st.warning("Silakan masukkan User ID dan password Anda.")
+
+    return None, None
 
 
 def clean_text(text):
@@ -435,31 +439,19 @@ def plot_MAE():
 
     st.write(f"Dari gambar dan tabel diatas kita dapat melihat pengujian nilai K dengan hasil MAE dan didapatkan nilai MAE paling terendah pada pengujian ke {Kbest.index.values} dengan nilai k sebesar {Kbest['k'].values[0]} dan nilai MAE sebesar {Kbest['MAE'].values[0]} sedangkan nilai k tertinggi di dapatkan pada pengujian ke {Kbad.index.values} dengan nilai k sebesar {Kbad['k'].values[0]} dan nilai MAE sebesar {Kbad['MAE'].values[0]} ,dapat di simpulkan semakin kecil nilai MAE semakain baik pula model machine learning yang buat")
 
-def register(ratings):
+def register():
     with st.form("register"):
         st.subheader("Registrasi Pengguna Baru")
-        new_user_id = st.text_input("User ID Baru", key="new_user_id")
-        new_user_name = st.text_input("Username Baru", key="new_user_name")
-        new_password = st.text_input("Password Baru", type='password', key="new_password")
-        confirm_password = st.text_input("Konfirmasi Password", type='password', key="confirm_password")
+        new_user_id = st.text_input("User ID Baru")
+        new_user_name = st.text_input("Username Baru")
+        new_password = st.text_input("Password Baru", type='password')
+        confirm_password = st.text_input("Konfirmasi Password", type='password')
+
         if st.form_submit_button("Registrasi"):
             if new_password == confirm_password:
-                # Tambahkan pengguna baru
-                hashed_password = Hasher([new_password]).generate()[0]
-                if new_user_id in config['credentials']['usernames']:
-                    st.error("User ID sudah ada. Silakan gunakan User ID lain.")
-                else:
-                    # Update konfigurasi authenticator
-                    config['credentials']['usernames'][new_user_id] = {
-                        'name': new_user_id,
-                        'password': hashed_password
-                    }
-                    save_config(config)
-                    # Tambahkan ke dataset ratings
-                    new_user = pd.DataFrame({'user_id': [new_user_id],'nama':[new_user_name],'domisili':[''],'Nama Restoran': [''], 'restaurant_id': [''], 'rating': ['']})
-                    ratings = pd.concat([ratings, new_user], ignore_index=True)
-                    ratings.to_csv('data/dataset/ratings_restaurant.csv',index=False)
-                    st.success("Registrasi berhasil! Silakan login.")
+                # Simpan user baru ke Google Sheets
+                register_user(new_user_id, new_user_name, new_password)
+                st.success("Registrasi berhasil! Silakan login.")
             else:
                 st.error("Password dan konfirmasi password tidak cocok.")
 
@@ -503,7 +495,7 @@ def add_ratings(baris, i, j,menu):
                         st.rerun()
                     break
 
-def save_ratings(user_id, ratings_df, df_places_to_eat, result_name,menu):
+def save_ratings(user_id, ratings_df, df_places_to_eat, result_name, menu):
     if f'ratings_to_save_{menu}' in st.session_state and st.session_state[f'ratings_to_save_{menu}']:
         for rating_data in st.session_state[f'ratings_to_save_{menu}']:
             baris, user_rating = rating_data
@@ -524,12 +516,9 @@ def save_ratings(user_id, ratings_df, df_places_to_eat, result_name,menu):
                 })
                 ratings_df = pd.concat([ratings_df, new_ratings], ignore_index=True)
 
-        # Simpan ke file CSV
-        ratings_df.to_csv('data/dataset/ratings_restaurant.csv', index=False)
+        # Simpan data ke Google Sheets
+        update_data("ratings", ratings_df)
 
-        # Kosongkan session state setelah menyimpan
-        st.session_state[f'ratings_to_save_{menu}'] = []
-        
         st.toast("Semua rating telah disimpan!", icon='✅')
         time.sleep(2)
         st.rerun()
@@ -588,19 +577,19 @@ def restaurant_data():
 st.write(f"<h4 style='text-align: center ;font-family: Arial, Helvetica, sans-serif;font-size: 34px;word-spacing: 2px;color: #000000;font-weight: 700;' >Sistem Rekomendasi Restoran di Jogja </h4>",unsafe_allow_html=True)
 # Authentication
 
-name, authentication_status, username = authenticator.login(fields={'Username':'User_id'})
+username, role = login()
 
-if authentication_status:
-    if username == 'admin':
+if username:
+    if  role == "admin":
         with st.sidebar :
             st.subheader(f'Selamat Datang {username} 👋')
-            authenticator.logout('Logout', 'sidebar',key='admin')
+            authenticator.logout('Logout', 'sidebar', key='admin')
             admin_menu=option_menu('Sistem Rekomendasi',['data preprocessing', 'prediksi', 'evaluasi'])
         if admin_menu=='data preprocessing':
             st.subheader('Content Based Filtering')
             content_prepro(restaurant)
             # st.write('tampilan dataset merge ')
-            # st.dataframe(data_merge)
+            # st.dataframe)
             st.subheader('Item-Based Collaborative Filtering')
             collab_prepro(rating)
             
@@ -679,7 +668,7 @@ if authentication_status:
         
         with st.sidebar :
             st.write(f'Selamat Datang {str(result_name[0])} 👋')
-            authenticator.logout('Logout', 'main',key='user')
+            authenticator.logout('Logout', 'main', key='user')
             user_menu=option_menu('user menu',['Restaurant','Rekomendation', 'User Rated'])
         
         if user_menu=='Restaurant':
@@ -867,15 +856,9 @@ if authentication_status:
         if 'confirm_delete' in st.session_state :
             confirm_delete(st.session_state['confirm_delete'])
 
-elif authentication_status == False:
-    st.error('User ID atau password salah')
-    on = st.toggle("belum memiliki akun?")
+else:
+    on = st.toggle("Belum memiliki akun?")
     if on:
-        register(ratings)
-elif authentication_status == None:
-    st.warning('Silakan masukkan User ID dan password Anda')
-    on = st.toggle("belum memiliki akun?")
-    if on:
-        register(ratings)
+        register()
 
     
