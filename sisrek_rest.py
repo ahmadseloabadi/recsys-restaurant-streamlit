@@ -23,7 +23,7 @@ import plotly.express as px
 import time
 import base64
 
-import recmetrics
+from sklearn.metrics.pairwise import cosine_similarity
 from google_sheets import load_data, update_data ,load_users, register_user
 
 stopwords_list=stopwords.words('indonesian')
@@ -321,12 +321,33 @@ def get_recommendations_hybrid(user_id,num_recommendations):
 
     return combined_recommendations
 
+def intra_list_similarity(recommendations, feature_matrix):
+    """Menghitung ILS tanpa recmetrics"""
+    if len(recommendations) < 2:
+        return 0  # Jika hanya 1 rekomendasi, ILS tidak relevan
 
-def evaluate_ils(user_ids, num_recommendations):
-    # -----silahkan unkomen untuk melakuakn nilai ils yang baru -----
+    vectors = feature_matrix.loc[recommendations].values
+    similarity_matrix = cosine_similarity(vectors)
+    avg_similarity = similarity_matrix[np.triu_indices_from(similarity_matrix, k=1)].mean()
+    
+    return avg_similarity
 
+def evaluate_ils(user_ids, num_recommendations, places_to_eat):
+    """Evaluasi Intra-List Similarity (ILS) untuk rekomendasi"""
     ils_results = []
-    matrix_varr=matrix_variasi()
+    
+    # Menghitung matrix fitur dari "Variasi Makanan"
+    exploded_foods = places_to_eat[['restaurant_id', 'Variasi Makanan']].copy()
+    exploded_foods['Variasi Makanan'] = exploded_foods['Variasi Makanan'].str.split(', ')
+    exploded_foods = exploded_foods.explode('Variasi Makanan')
+
+    # One-hot encoding kategori makanan
+    matrix_foods = pd.get_dummies(exploded_foods['Variasi Makanan'])
+    matrix_foods['restaurant_id'] = exploded_foods['restaurant_id']
+
+    # Gabungkan encoding per restoran
+    binary_matrix = matrix_foods.groupby('restaurant_id').sum()
+
     for num_rec in num_recommendations:
         row_cbf = {'Metode': 'CBF', 'Num_Rec': num_rec}
         row_hybrid = {'Metode': 'Hybrid', 'Num_Rec': num_rec}
@@ -334,34 +355,28 @@ def evaluate_ils(user_ids, num_recommendations):
         for user_id in user_ids:
             recommendations = get_recommendations_hybrid(str(user_id), num_rec)
             
-            # Content-based recommendations
-            content_indices = [places_to_eat.index[places_to_eat['restaurant_id'] == rec].tolist()[0] for rec in recommendations[recommendations['Metode'] == 'Content-based']['restaurant_id']]
-            content_restaurants = [places_to_eat['restaurant_id'].iloc[i] for i in content_indices]
-            recommendation_content = pd.DataFrame({'restaurant_id': [content_restaurants]})            
-            content_ils = recmetrics.intra_list_similarity(recommendation_content['restaurant_id'], matrix_varr)
+            # Content-Based Recommendations
+            content_restaurants = recommendations[recommendations['Metode'] == 'Content-based']['restaurant_id'].tolist()
+            content_ils = intra_list_similarity(content_restaurants, binary_matrix)
             row_cbf[f'User_{user_id}'] = content_ils            
-            
-            # Hybrid recommendations
-            hybrid_indices = [places_to_eat.index[places_to_eat['restaurant_id'] == rec].tolist()[0] for rec in recommendations['restaurant_id']]
-            hybrid_restaurants = [places_to_eat['restaurant_id'].iloc[i] for i in hybrid_indices]
-            recommendation_hybrid = pd.DataFrame({'restaurant_id': [hybrid_restaurants]})
-            hybrid_ils = recmetrics.intra_list_similarity(recommendation_hybrid['restaurant_id'], matrix_varr)
+
+            # Hybrid Recommendations
+            hybrid_restaurants = recommendations['restaurant_id'].tolist()
+            hybrid_ils = intra_list_similarity(hybrid_restaurants, binary_matrix)
             row_hybrid[f'User_{user_id}'] = hybrid_ils
-            
-        # Calculate average ILS
-        row_cbf['Average'] = sum(row_cbf[f'User_{user_id}'] for user_id in user_ids) / len(user_ids)
-        row_hybrid['Average'] = sum(row_hybrid[f'User_{user_id}'] for user_id in user_ids) / len(user_ids)
         
-        # Append rows to results
+        # Hitung rata-rata ILS
+        row_cbf['Average'] = np.mean([row_cbf[f'User_{user_id}'] for user_id in user_ids])
+        row_hybrid['Average'] = np.mean([row_hybrid[f'User_{user_id}'] for user_id in user_ids])
+
+        # Simpan hasil
         ils_results.append(row_cbf)
         ils_results.append(row_hybrid)
-    
-    # Convert results to DataFrame and save to CSV
+
+    # Simpan hasil evaluasi ke CSV
     ils_results_df = pd.DataFrame(ils_results)
-    ils_results_df = ils_results_df.sort_values(by='Metode')
     ils_results_df.to_csv("data/evaluation/eval_ils_new.csv", index=False)
 
-    ils_results_df = pd.read_csv("data/evaluation/eval_ils_new.csv")
     return ils_results_df
 
 def plot_ils():
