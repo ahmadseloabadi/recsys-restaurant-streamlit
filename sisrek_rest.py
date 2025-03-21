@@ -1,10 +1,10 @@
 import streamlit as st
 import streamlit_authenticator as stauth
-from streamlit_authenticator.utilities.hasher import Hasher
+
 from streamlit_option_menu import option_menu
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.neighbors import NearestNeighbors
+
 
 from surprise import Dataset, Reader, KNNBasic
 from surprise.model_selection import train_test_split
@@ -18,7 +18,6 @@ from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from collections import defaultdict, OrderedDict
 
-import matplotlib.pyplot as plt
 import plotly.express as px
 
 import time
