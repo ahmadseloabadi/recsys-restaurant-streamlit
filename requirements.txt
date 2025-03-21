@@ -7,3 +7,4 @@ scikit_learn==1.0.2
 scikit-surprise --prefer-binary
 streamlit_authenticator==0.3.2
 streamlit_option_menu==0.3.2
+plotly==4.14.3
