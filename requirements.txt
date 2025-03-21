@@ -3,7 +3,7 @@ matplotlib==3.10.1
 nltk==3.8.1
 numpy==2.2.4
 pandas==2.2.3
-plotly==5.24.0
+plotly==4.11.0
 protobuf==3.20.3
 recmetrics==0.1.5
 scikit_learn==1.0.2
