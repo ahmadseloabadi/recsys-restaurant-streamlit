@@ -43,17 +43,15 @@ def create_users_from_ratings():
     users_df['role'] = "user"
 
     # **Tambahkan Admin Secara Manual (Jika Belum Ada)**
-    admin_id = "admin"
-    admin_name = "admin"
-    admin_password = Hasher(["admin123"]).generate()[0]  # Password default untuk admin
-    admin_role = "admin"
+    admin_data = pd.DataFrame({
+        'user_id': ['admin'],
+        'nama': ['admin'],
+        'password': Hasher(["admin123"]).generate(),  # Password admin123 (hashed)
+        'role': ['admin']
+    })
 
-    # Periksa apakah admin sudah ada di data
-    if admin_id not in users_df['user_id'].values:
-        users_df['user_id'] = admin_id
-        users_df['nama'] = admin_name
-        users_df['password'] = admin_password
-        users_df['role'] = admin_role
+    # Gabungkan data admin dan user
+    users_df = pd.concat([admin_data, users_df], ignore_index=True)
 
 
     # Simpan ke tab "users" di Google Sheets
