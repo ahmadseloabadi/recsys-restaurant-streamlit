@@ -92,7 +92,7 @@ def login():
         cookie_expiry_days=30
     )
 
-    name, authentication_status, username = authenticator.login(fields={"Username": "User ID"})
+    authentication_status, username = authenticator.login(fields={"Username": "User ID"})
 
     if authentication_status:
         
