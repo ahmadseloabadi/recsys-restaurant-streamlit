@@ -32,7 +32,7 @@ def download_stopwords():
     nltk.download('stopwords')
     return stopwords.words('indonesian')
 stopwords_list = download_stopwords()
-stopwords_list=stopwords.words('indonesian')
+
 porter = PorterStemmer()
 
 def gif_load(filename):
