@@ -678,7 +678,7 @@ if username:
             st.write('pengujian ILS yang dilakukan menggunakan "Variasi Makanan" yang dimiliki pada setiap item sebagai parameter kemiripan pada hasil daftar rekomendasi yang diberikan berikut merupakan tampilan matriks Variasi Makanan dari semua restoran berdasarkan restaurant_id')
             matrix_var=matrix_variasi()
             st.write(matrix_var)
-            eva_ils=evaluate_ils(user_id, num_recommendations_list)
+            eva_ils=evaluate_ils(user_id, num_recommendations_list,places_to_eat)
             st.write(f'berikut merupakan hasil pengujian ILS pada user {user_id}')
             st.dataframe(eva_ils)
             plot_ils()
