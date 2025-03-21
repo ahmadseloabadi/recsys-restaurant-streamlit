@@ -102,7 +102,7 @@ def login():
     elif authentication_status == None:
         st.warning("Silakan masukkan User ID dan password Anda.")
 
-    return None, None
+    return name,None, None
 
 
 def clean_text(text):
@@ -597,9 +597,9 @@ def restaurant_data():
 st.write(f"<h4 style='text-align: center ;font-family: Arial, Helvetica, sans-serif;font-size: 34px;word-spacing: 2px;color: #000000;font-weight: 700;' >Sistem Rekomendasi Restoran di Jogja </h4>",unsafe_allow_html=True)
 # Authentication
 
-username, role = login()
+username,user_id, role = login()
 
-if username:
+if user_id:
     if  role == "admin":
         with st.sidebar :
             st.subheader(f'Selamat Datang {username} 👋')
