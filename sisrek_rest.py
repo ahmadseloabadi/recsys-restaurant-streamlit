@@ -79,7 +79,7 @@ def login():
 
     for _, row in users_df.iterrows():
         credentials["usernames"][str(row["user_id"])] = {
-            "name": row["name"],
+            "nama": row["nama"],
             "password": row["password"],
             "role": row["role"]
         }
