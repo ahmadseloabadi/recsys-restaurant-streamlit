@@ -10,6 +10,7 @@ from surprise import Dataset, Reader, KNNBasic
 from surprise.model_selection import train_test_split
 from surprise import accuracy
 
+import nltk
 import pandas as pd
 import numpy as np
 import re
@@ -26,6 +27,11 @@ import base64
 from sklearn.metrics.pairwise import cosine_similarity
 from google_sheets import load_data, update_data ,load_users, register_user
 
+@st.cache_resource
+def download_stopwords():
+    nltk.download('stopwords')
+    return stopwords.words('indonesian')
+stopwords_list = download_stopwords()
 stopwords_list=stopwords.words('indonesian')
 porter = PorterStemmer()
 
