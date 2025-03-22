@@ -1,3 +1,10 @@
+import psycopg2
+import os
+import nltk
+import pandas as pd
+import numpy as np
+import re
+
 import streamlit as st
 import streamlit_authenticator as stauth
 
@@ -10,11 +17,6 @@ from surprise import Dataset, Reader, KNNBasic
 from surprise.model_selection import train_test_split
 from surprise import accuracy
 
-import nltk
-import pandas as pd
-import numpy as np
-import re
-
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from collections import defaultdict, OrderedDict
@@ -24,8 +26,17 @@ import plotly.express as px
 import time
 import base64
 
-from sklearn.metrics.pairwise import cosine_similarity
-from google_sheets import load_data, update_data ,load_users, register_user
+from bcrypt import hashpw, gensalt, checkpw
+from dotenv import load_dotenv
+
+def gif_load(filename):
+    file_ = open(f"data/img/{filename}.gif", "rb")
+    contents = file_.read()
+    data_url = base64.b64encode(contents).decode("utf-8")
+    file_.close()
+    return data_url
+data_loc=gif_load('icon')
+st.set_page_config(page_title="restaurant recomendation", page_icon=f"data:image/gif;base64,{data_loc}")
 
 @st.cache_resource
 def download_stopwords():
@@ -35,33 +46,45 @@ stopwords_list = download_stopwords()
 
 porter = PorterStemmer()
 
-def gif_load(filename):
-    file_ = open(f"data/img/{filename}.gif", "rb")
-    contents = file_.read()
-    data_url = base64.b64encode(contents).decode("utf-8")
-    file_.close()
-    return data_url
-
-data_loc=gif_load('icon')
-st.set_page_config(page_title="restaurant recomendation", page_icon=f"data:image/gif;base64,{data_loc}")
-
 # Memuat dataset
 
-def load_dataset():
-    places_to_eat = load_data("places_to_eat")
-    ratings = load_data("ratings")
+# Load environment variables
+load_dotenv()
+SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 
-    places_to_eat['Rating Toko'] = places_to_eat['Rating Toko'].round().clip(1, 5)
+def connect_db():
+    return psycopg2.connect(SUPABASE_DB_URL)
 
-    if 'restaurant_id' not in places_to_eat.columns:
-        places_to_eat.insert(0, 'restaurant_id', places_to_eat.index)
+def load_data(table_name):
+    conn = connect_db()
+    query = f"SELECT * FROM {table_name};"
+    df = pd.read_sql(query, conn)
+    conn.close()
+    return df
 
-    ratings_new = ratings.merge(places_to_eat[['restaurant_id', 'Nama Restoran']], on='Nama Restoran', how='left', suffixes=['', "_y"])
-    ratings = ratings_new[['user_id', 'nama', 'domisili', 'Nama Restoran', 'restaurant_id', 'rating']]
+def get_restaurant_id(nama_restoran):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT restaurant_id FROM places_to_eat WHERE nama_restoran = %s;", (nama_restoran,))
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return result[0] if result else None
 
-    return ratings, places_to_eat
+def load_users():
+    return load_data("users")
 
-ratingss, places_to_eat = load_dataset()
+def check_user_exists(user_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT EXISTS (SELECT 1 FROM users WHERE user_id = %s);", (user_id,))
+    exists = cursor.fetchone()[0]
+    cursor.close()
+    conn.close()
+    return exists
+
+ratingss = load_data("ratings")
+places_to_eat = load_data("places_to_eat")
 
 restaurant=places_to_eat.copy()
 rating=ratingss.copy()
@@ -71,38 +94,6 @@ ratings = rating.dropna(subset=['rating'])
 rating['user_id'] = rating['user_id'].astype(str)
 ratings['user_id'] = ratings['user_id'].astype(str)
 ratings['rating'] = ratings['rating'].astype(int)
-
-# Konfigurasi autentikasi dari Google Sheets
-def login():
-    users_df = load_users()
-    credentials = {"usernames": {}}
-
-    for _, row in users_df.iterrows():
-        credentials["usernames"][str(row["user_id"])] = {
-            "name": row["nama"],
-            "password": row["password"],
-            "role": row["role"]
-        }
-
-    global authenticator  # Buat objek global agar bisa digunakan di logout
-    authenticator = stauth.Authenticate(
-        credentials,
-        "auth_cookie",
-        "random_key",
-        cookie_expiry_days=30
-    )
-
-    name, authentication_status, username = authenticator.login(fields={"Username": "User ID"})
-
-    if authentication_status:
-        
-        return username, credentials["usernames"][username]["role"]
-    elif authentication_status == False:
-        st.error("User ID atau password salah.")
-    elif authentication_status == None:
-        st.warning("Silakan masukkan User ID dan password Anda.")
-
-    return None, None
 
 
 def clean_text(text):
@@ -117,7 +108,7 @@ def clean_text(text):
 
 # Preprocessing Content-Based Filtering
 tfidf_vectorizer = TfidfVectorizer()
-places_to_eat['Features'] = places_to_eat['Preferensi Makanan'] + " " + places_to_eat['Jenis Suasana'] + " " + places_to_eat['Variasi Makanan'] #pengambilan fitur
+places_to_eat['Features'] = places_to_eat['preferensi_makanan'] + " " + places_to_eat['jenis_suasana'] + " " + places_to_eat['variasi_makanan'] #pengambilan fitur
 places_to_eat['prepro_Features']=places_to_eat['Features'].apply(clean_text) #implementasi text preprocessing
 tfidf_matrix = tfidf_vectorizer.fit_transform(places_to_eat['prepro_Features']) #implementasi tf-idf
 cosine_sim = cosine_similarity(tfidf_matrix)
@@ -126,7 +117,7 @@ cosine_sim = cosine_similarity(tfidf_matrix)
 
 # Preprocessing Item-Based Collaborative Filtering
 pivot_tables = ratings.pivot_table(index='user_id', columns='restaurant_id', values='rating').fillna(0)
-pivot_table = ratings.pivot_table(index='user_id', columns='Nama Restoran', values='rating').fillna(0)
+pivot_table = ratings.pivot_table(index='user_id', columns='nama_restoran', values='rating').fillna(0)
 
 # Menyiapkan data untuk Surprise
 reader = Reader(rating_scale=(1, 5))
@@ -146,20 +137,20 @@ algo = KNNBasic(sim_options=sim_options)
 algo.fit(trainset)
 
 # Menyiapkan data popularitas restoran
-average_ratings = rating.groupby(['restaurant_id', 'Nama Restoran']).agg({'rating': 'mean'}).reset_index()
-average_ratings.columns = ['restaurant_id','Nama Restoran', 'Average Rating']
+average_ratings = rating.groupby(['restaurant_id', 'nama_restoran']).agg({'rating': 'mean'}).reset_index()
+average_ratings.columns = ['restaurant_id','nama_restoran', 'Average Rating']
 average_ratings['Average Rating'] = average_ratings['Average Rating'].round().clip(1, 5)
 average_ratings = average_ratings.sort_values(by='Average Rating', ascending=False)
 
 @st.cache_data
 def matrix_variasi():
-    # Split 'Variasi Makanan' into individual food types
-    exploded_foods = places_to_eat[['restaurant_id', 'Variasi Makanan']].copy()
-    exploded_foods['Variasi Makanan'] = exploded_foods['Variasi Makanan'].str.split(', ')
-    exploded_foods = exploded_foods.explode('Variasi Makanan')
+    # Split 'variasi_makanan' into individual food types
+    exploded_foods = places_to_eat[['restaurant_id', 'variasi_makanan']].copy()
+    exploded_foods['variasi_makanan'] = exploded_foods['variasi_makanan'].str.split(', ')
+    exploded_foods = exploded_foods.explode('variasi_makanan')
 
     # Use get_dummies to create a one-hot encoding of the food variations
-    matrix_foods = pd.get_dummies(exploded_foods['Variasi Makanan'])
+    matrix_foods = pd.get_dummies(exploded_foods['variasi_makanan'])
     matrix_foods['restaurant_id'] = exploded_foods['restaurant_id']
 
     # Group by 'restaurant_id' and sum to combine the one-hot encodings for each restaurant
@@ -171,14 +162,14 @@ def content_prepro(restaurant):#bagian data preprocessing pada content based fil
     #menghapus kolom yang tidak di gunakan
     st.write('Tampilan dataset Restaurant')
     st.dataframe(restaurant)
-    restaurant.drop(columns=["Harga Rata-Rata Makanan di Toko (Rp)","Keramaian Restoran",'Disajikan atau Ambil Sendiri','All You Can Eat atau Ala Carte'],axis=1,inplace=True)
-    st.write('menghapus beberapa kolom yang tidak di gunakan seperti "Harga Rata-Rata Makanan di Toko (Rp)","Keramaian Restoran","Disajikan atau Ambil Sendiri","All You Can Eat atau Ala Carte",sehingga tamilan dataset restaurant sebagai berikut')
+    restaurant.drop(columns=["harga_rata_rata","keramaian_restoran",'disajikan_atau_ambil_sendiri','all_you_can_eat_atau_ala_carte'],axis=1,inplace=True)
+    st.write('menghapus beberapa kolom yang tidak di gunakan seperti "harga_rata_rata","keramaian_restoran","disajikan_atau_ambil_sendiri","all_you_can_eat_atau_ala_carte",sehingga tamilan dataset restaurant sebagai berikut')
     st.dataframe(restaurant)
 
-    restaurant['Features'] = restaurant['Preferensi Makanan'] + " " + restaurant['Jenis Suasana'] + " " + restaurant['Variasi Makanan']
+    restaurant['Features'] = restaurant['preferensi_makanan'] + " " + restaurant['jenis_suasana'] + " " + restaurant['variasi_makanan']
 
     st.write('Tampilan fitur yang di gunakan pada metode content based filtering')
-    restaurant_features=restaurant[['Preferensi Makanan','Jenis Suasana','Variasi Makanan','Features']]
+    restaurant_features=restaurant[['preferensi_makanan','jenis_suasana','variasi_makanan','Features']]
     st.dataframe(restaurant_features)
 
     restaurant['prepro_Features']=restaurant['Features'].apply(clean_text)
@@ -243,14 +234,14 @@ def collab_prepro(rating):
 
 def get_user_rated_restaurants(user_id,num_recommendations): #bagian menampilkanr restoran yg sudah di rating user
     if user_id not in pivot_table.index:
-        user_new = pd.DataFrame(columns=['restaurant_id',"Nama Restoran", "Rating Anda"])
+        user_new = pd.DataFrame(columns=['restaurant_id',"nama_restoran", "Rating Anda"])
         return user_new
     restoran_user_tertentu = rating[rating['user_id'] == user_id]
-    df_user_rated = restoran_user_tertentu[['restaurant_id', 'Nama Restoran', 'rating']][:num_recommendations]
+    df_user_rated = restoran_user_tertentu[['restaurant_id', 'nama_restoran', 'rating']][:num_recommendations]
     return df_user_rated
 
 def content_based_filtering(restaurant_name, num_recommendations):
-    idx = places_to_eat.index[places_to_eat['Nama Restoran'] == restaurant_name].tolist()[0]
+    idx = places_to_eat.index[places_to_eat['nama_restoran'] == restaurant_name].tolist()[0]
     sim_scores = list(enumerate(cosine_sim[idx]))
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
     sim_scores = sim_scores[1:num_recommendations + 1]
@@ -259,8 +250,8 @@ def content_based_filtering(restaurant_name, num_recommendations):
 
 def get_recommendations_content_based(restaurant_name, num_recommendations):
     restaurant_indices=content_based_filtering(restaurant_name, num_recommendations)
-    recommendations_content=[(places_to_eat['restaurant_id'].iloc[i],places_to_eat['Nama Restoran'].iloc[i], places_to_eat['Rating Toko'].iloc[i]) for i in restaurant_indices]
-    df_recommendations_content = pd.DataFrame(recommendations_content, columns=["restaurant_id","Nama Restoran", "Rating"])
+    recommendations_content=[(places_to_eat['restaurant_id'].iloc[i],places_to_eat['nama_restoran'].iloc[i], places_to_eat['rating_toko'].iloc[i]) for i in restaurant_indices]
+    df_recommendations_content = pd.DataFrame(recommendations_content, columns=["restaurant_id","nama_restoran", "Rating"])
     st.write(f"Rekomendasi restaurant yang serupa {restaurant_name}:")
     return df_recommendations_content
 
@@ -270,8 +261,8 @@ def item_based_collaborative_filtering(user_id,num_recommendations):
         # Return popular restaurants if user_id not found
         popular_restaurants = average_ratings.head(num_recommendations)
         
-        pop_rest=list(zip(popular_restaurants['Nama Restoran'], popular_restaurants['Average Rating']))
-        popular_rest = pd.DataFrame(pop_rest, columns=["Nama Restoran", "Rating"])
+        pop_rest=list(zip(popular_restaurants['nama_restoran'], popular_restaurants['Average Rating']))
+        popular_rest = pd.DataFrame(pop_rest, columns=["nama_restoran", "Rating"])
         return popular_rest
     # Dapatkan item yang belum dirating oleh user_id
     rated_restaurants = ratings[ratings['user_id'] == user_id]['restaurant_id'].unique()
@@ -286,8 +277,8 @@ def item_based_collaborative_filtering(user_id,num_recommendations):
     # Susun hasil rekomendasi ke dalam DataFrame
     recommendations = []
     for pred in top_predictions:
-        restaurant_name = rating.loc[rating['restaurant_id'] == pred.iid, 'Nama Restoran'].values[0]
-        recommendations.append({'restaurant_id':pred.iid,'Nama Restoran': restaurant_name, 'Rating': pred.est})
+        restaurant_name = rating.loc[rating['restaurant_id'] == pred.iid, 'nama_restoran'].values[0]
+        recommendations.append({'restaurant_id':pred.iid,'nama_restoran': restaurant_name, 'Rating': pred.est})
     recommendations=pd.DataFrame(recommendations)    
     recommendations['Rating'] = recommendations['Rating'].round().clip(1, 5)
     return recommendations
@@ -301,7 +292,7 @@ def get_recommendations_item_based(user_id, num_recommendations):
         rest_rect=item_based_collaborative_filtering(user_id,num_recommendations)
         return rest_rect
     recommendations=item_based_collaborative_filtering(user_id,num_recommendations)
-    df_recommendations_item = pd.DataFrame(recommendations, columns=['restaurant_id',"Nama Restoran", "Rating"])
+    df_recommendations_item = pd.DataFrame(recommendations, columns=['restaurant_id',"nama_restoran", "Rating"])
     
     st.subheader(f"Rekomendasi restaurant untuk {result_name[0]}")
     return df_recommendations_item
@@ -309,20 +300,20 @@ def get_recommendations_item_based(user_id, num_recommendations):
 def get_recommendations_hybrid(user_id,num_recommendations):    
 
     if user_id not in pivot_table.index:
-        restaurant_name = average_ratings['Nama Restoran'].values[0]
+        restaurant_name = average_ratings['nama_restoran'].values[0]
     else:
-        restaurant_name = ratings.loc[ratings['user_id'] == user_id].sort_values('rating', ascending=False)['Nama Restoran'].values[0]
+        restaurant_name = ratings.loc[ratings['user_id'] == user_id].sort_values('rating', ascending=False)['nama_restoran'].values[0]
     
     num_recommendations=num_recommendations//2
     
     content_rec=content_based_filtering(restaurant_name,num_recommendations)
     collab_rec=item_based_collaborative_filtering(user_id,num_recommendations)
 
-    recommendations_content = [(places_to_eat['restaurant_id'].iloc[i],places_to_eat['Nama Restoran'].iloc[i], places_to_eat['Rating Toko'].iloc[i], 'Content-based') for i in content_rec]
-    df_recommendations_content = pd.DataFrame(recommendations_content, columns=['restaurant_id',"Nama Restoran", "Rating", "Metode"])
+    recommendations_content = [(places_to_eat['restaurant_id'].iloc[i],places_to_eat['nama_restoran'].iloc[i], places_to_eat['rating_toko'].iloc[i], 'Content-based') for i in content_rec]
+    df_recommendations_content = pd.DataFrame(recommendations_content, columns=['restaurant_id',"nama_restoran", "Rating", "Metode"])
     
-    recommendations_item = [(rest['restaurant_id'],rest['Nama Restoran'], rest['Rating'], 'Collaborative') for idx, rest in collab_rec.iterrows()]
-    df_recommendations_item = pd.DataFrame(recommendations_item, columns=['restaurant_id',"Nama Restoran", "Rating", "Metode"])
+    recommendations_item = [(rest['restaurant_id'],rest['nama_restoran'], rest['Rating'], 'Collaborative') for idx, rest in collab_rec.iterrows()]
+    df_recommendations_item = pd.DataFrame(recommendations_item, columns=['restaurant_id',"nama_restoran", "Rating", "Metode"])
     combined_recommendations = pd.concat([df_recommendations_content, df_recommendations_item]).drop_duplicates().reset_index(drop=True)
 
     return combined_recommendations
@@ -342,13 +333,13 @@ def evaluate_ils(user_ids, num_recommendations, places_to_eat):
     """Evaluasi Intra-List Similarity (ILS) untuk rekomendasi"""
     ils_results = []
     
-    # Menghitung matrix fitur dari "Variasi Makanan"
-    exploded_foods = places_to_eat[['restaurant_id', 'Variasi Makanan']].copy()
-    exploded_foods['Variasi Makanan'] = exploded_foods['Variasi Makanan'].str.split(', ')
-    exploded_foods = exploded_foods.explode('Variasi Makanan')
+    # Menghitung matrix fitur dari "variasi_makanan"
+    exploded_foods = places_to_eat[['restaurant_id', 'variasi_makanan']].copy()
+    exploded_foods['variasi_makanan'] = exploded_foods['variasi_makanan'].str.split(', ')
+    exploded_foods = exploded_foods.explode('variasi_makanan')
 
     # One-hot encoding kategori makanan
-    matrix_foods = pd.get_dummies(exploded_foods['Variasi Makanan'])
+    matrix_foods = pd.get_dummies(exploded_foods['variasi_makanan'])
     matrix_foods['restaurant_id'] = exploded_foods['restaurant_id']
 
     # Gabungkan encoding per restoran
@@ -459,26 +450,73 @@ def plot_MAE():
 
     st.write(f"Dari gambar dan tabel diatas kita dapat melihat pengujian nilai K dengan hasil MAE dan didapatkan nilai MAE paling terendah pada pengujian ke {Kbest.index.values} dengan nilai k sebesar {Kbest['k'].values[0]} dan nilai MAE sebesar {Kbest['MAE'].values[0]} sedangkan nilai k tertinggi di dapatkan pada pengujian ke {Kbad.index.values} dengan nilai k sebesar {Kbad['k'].values[0]} dan nilai MAE sebesar {Kbad['MAE'].values[0]} ,dapat di simpulkan semakin kecil nilai MAE semakain baik pula model machine learning yang buat")
 
+def register_user(nama, password):
+    if check_user_exists(user_id):
+        return False
+    hashed_password = hashpw(password.encode(), gensalt()).decode()
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO users (user_id, nama, password, role) VALUES (gen_random_uuid(), %s, %s, 'user')
+    """, (nama, hashed_password))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return True
+
 def register():
+    
     with st.form("register"):
         st.subheader("Registrasi Pengguna Baru")
-        new_user_id = st.text_input("User ID Baru")
         new_user_name = st.text_input("Username Baru")
         new_password = st.text_input("Password Baru", type='password')
         confirm_password = st.text_input("Konfirmasi Password", type='password')
-
+        
         if st.form_submit_button("Registrasi"):
-            if new_password == confirm_password:
-                # Simpan user baru ke Google Sheets
-                register_user(new_user_id, new_user_name, new_password)
-                st.success("Registrasi berhasil! Silakan login.")
+            register_status=register_user(new_user_name, new_password)
+            if register_status:
+                if new_password == confirm_password:
+                    st.success("Registrasi berhasil! Silakan login.")
+                else:
+                    st.error("Password dan konfirmasi password tidak cocok.")
             else:
-                st.error("Password dan konfirmasi password tidak cocok.")
+                st.error("Username sudah terdaftar. Silakan gunakan username lain.")
+
+def login():
+    users_df = load_users()
+    credentials = {"usernames": {}}
+
+    for _, row in users_df.iterrows():
+        credentials["usernames"][row["nama"]] = {
+            "user_id": row["user_id"],
+            "name": row["nama"],
+            "password": row["password"],
+            "role": row["role"]
+        }
+
+    global authenticator
+    authenticator = stauth.Authenticate(
+        credentials,
+        "auth_cookie",
+        "random_key",
+        cookie_expiry_days=30
+    )
+
+    name,authentication_status, username = authenticator.login(fields={"Username": "Username"})
+
+    if authentication_status:
+        user_id = credentials["usernames"][username]["user_id"]  # Ambil user_id
+        return user_id,username, credentials["usernames"][username]["role"]
+    elif authentication_status is False:
+        st.error("Username atau password salah.")
+    elif authentication_status is None:
+        st.warning("Silakan masukkan Username dan password Anda.")
+    return None,None, None
 
 # @st.experimental_fragment
-def add_ratings(baris, i, j,menu):
+def add_ratings(baris, i, j, menu):
     with st.popover('Rating'):
-        with st.form(key=f"rating_form_{i}_{j}",border=False):
+        with st.form(key=f"rating_form_{i}_{j}", border=False):
             user_rating = st.slider(
                 f"Beri rating untuk {baris[2]}",
                 min_value=1, max_value=5, value=3,
@@ -489,7 +527,6 @@ def add_ratings(baris, i, j,menu):
             if submitted:
                 if f'ratings_to_save_{menu}' not in st.session_state:
                     st.session_state[f'ratings_to_save_{menu}'] = []
-                # Cek apakah rating untuk restoran ini sudah ada
                 existing_index = next(
                     (index for index, (saved_row, _) in enumerate(st.session_state[f'ratings_to_save_{menu}'])
                      if saved_row == baris),
@@ -504,40 +541,34 @@ def add_ratings(baris, i, j,menu):
                     st.toast(f"Rating {user_rating} untuk {baris[2]}!", icon='✅')
                 time.sleep(2)
                 st.rerun()
-        # Tambahkan opsi untuk menghapus rating
+        
         if f'ratings_to_save_{menu}' in st.session_state:
             for index, (saved_row, saved_rating) in enumerate(st.session_state[f'ratings_to_save_{menu}']):
                 if saved_row == baris:
-                    if st.button(f"Hapus rating {user_rating} ", key=f"delete_button_{i}_{j}"):
+                    if st.button(f"Hapus rating {saved_rating}", key=f"delete_button_{i}_{j}"):
                         st.session_state[f'ratings_to_save_{menu}'].pop(index)
-                        st.toast(f"Rating {user_rating} untuk {saved_row[2]} dihapus!", icon='❌')
+                        st.toast(f"Rating {saved_rating} untuk {saved_row[2]} dihapus!", icon='❌')
                         time.sleep(2)
                         st.rerun()
                     break
 
-def save_ratings(user_id, ratings_df, df_places_to_eat, result_name, menu):
+def save_ratings(user_id,username, menu):
     if f'ratings_to_save_{menu}' in st.session_state and st.session_state[f'ratings_to_save_{menu}']:
-        for rating_data in st.session_state[f'ratings_to_save_{menu}']:
-            baris, user_rating = rating_data
-            
-            existing_entry = ratings_df[(ratings_df['user_id'] == user_id) & (ratings_df['Nama Restoran'] == str(baris[2]))]
-            if not existing_entry.empty:
-                ratings_df.loc[(ratings_df['user_id'] == user_id) & (ratings_df['Nama Restoran'] == str(baris[2])), 'rating'] = user_rating
+        conn = connect_db()
+        cursor = conn.cursor()
+        for baris, user_rating in st.session_state[f'ratings_to_save_{menu}']:
+            restaurant_id = get_restaurant_id(baris[2])  # Ambil UUID dari places_to_eat
+            if restaurant_id:
+                cursor.execute("""
+                    INSERT INTO ratings (user_id,nama , restaurant_id, nama_restoran, rating)
+                    VALUES (%s::uuid,%s , %s::uuid, %s, %s);
+                """, (user_id,username, restaurant_id, baris[2], user_rating))
             else:
-                domisili = ratings_df[ratings_df['user_id'] == user_id]['domisili'].unique()
-                restoran_id = df_places_to_eat[df_places_to_eat['Nama Restoran'] == str(baris[2])]['restaurant_id'].unique()
-                new_ratings = pd.DataFrame({
-                    'user_id': [user_id],
-                    'nama': [result_name[0]],
-                    'domisili': [str(domisili[0])],
-                    'Nama Restoran': [baris[2]],
-                    'restaurant_id': [restoran_id[0]],
-                    'rating': [user_rating]
-                })
-                ratings_df = pd.concat([ratings_df, new_ratings], ignore_index=True)
-
-        # Simpan data ke Google Sheets
-        update_data("ratings", ratings_df)
+                st.warning(f"Restoran {baris[2]} tidak ditemukan di database.")
+                continue
+        conn.commit()
+        cursor.close()
+        conn.close()
 
         st.toast("Semua rating telah disimpan!", icon='✅')
         time.sleep(2)
@@ -551,18 +582,33 @@ def delete_rating(menu):
     time.sleep(2)
     st.rerun()
 
-def delete_user_rating(user_id, restaurant_name):
+def get_ratings_id(username,nama_restoran):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM ratings WHERE nama = %s AND nama_restoran = %s;", (username,nama_restoran))
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return result[0] if result else None
+
+def delete_user_rating(username, restaurant_name):
     # Cari indeks rating yang cocok di DataFrame
-    index_to_delete = rating[(rating['user_id'] == user_id) & (rating['Nama Restoran'] == restaurant_name)].index
-    if not index_to_delete.empty:
-        rating.drop(index_to_delete, inplace=True)
-        # Simpan perubahan ke file CSV
-        rating.to_csv('data/dataset/ratings_restaurant.csv', index=False)
+    id = get_ratings_id(username,restaurant_name)
+    print("id =",id)
+    if id :
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute(
+                "DELETE FROM ratings WHERE nama = %s AND nama_restoran = %s;"
+            , (username, restaurant_name))
+        conn.commit()
+        cursor.close()
+        conn.close()
         st.toast(f"Rating untuk {restaurant_name} berhasil dihapus!", icon='❌')
     else:
         st.toast(f"Tidak ada rating untuk {restaurant_name} yang ditemukan.", icon='⚠️')
 
-@st.experimental_dialog("Konfirmasi Penghapusan")
+@st.dialog("Konfirmasi Penghapusan")
 def confirm_delete(restaurant_name):
     st.write(f"Apakah Anda yakin ingin menghapus rating untuk {restaurant_name}?")
     col1, col2 = st.columns(2)
@@ -582,23 +628,23 @@ def confirm_delete(restaurant_name):
         st.rerun()
 
 def restaurant_data():
-    # Mengambil nama restoran yang sudah di-rating oleh user tertentu
-    rated_restaurants = rating[rating['user_id'] == username]['Nama Restoran'].unique()
+    # Mengambil nama_restoran yang sudah di-rating oleh user tertentu
+    rated_restaurants = rating[rating['user_id'] == username]['nama_restoran'].unique()
     # Mengambil data restoran yang belum di-rating oleh user tersebut
-    unrated_restaurants = places_to_eat[~places_to_eat['Nama Restoran'].isin(rated_restaurants)]
-    unrated_restaurants=unrated_restaurants[['restaurant_id',"Nama Restoran", "Rating Toko"]]
-    pop_rest=list(zip(average_ratings['Nama Restoran'], average_ratings['Average Rating']))
-    popular_rest = pd.DataFrame(pop_rest, columns=["Nama Restoran", "Rating"])
+    unrated_restaurants = places_to_eat[~places_to_eat['nama_restoran'].isin(rated_restaurants)]
+    unrated_restaurants=unrated_restaurants[['restaurant_id',"nama_restoran", "rating_toko"]]
+    pop_rest=list(zip(average_ratings['nama_restoran'], average_ratings['Average Rating']))
+    popular_rest = pd.DataFrame(pop_rest, columns=["nama_restoran", "Rating"])
 
-    all_restaurant = places_to_eat['Nama Restoran'].values.tolist()
+    all_restaurant = places_to_eat['nama_restoran'].values.tolist()
     return all_restaurant,popular_rest,unrated_restaurants
 
 # Streamlit UI
 st.write(f"<h4 style='text-align: center ;font-family: Arial, Helvetica, sans-serif;font-size: 34px;word-spacing: 2px;color: #000000;font-weight: 700;' >Sistem Rekomendasi Restoran di Jogja </h4>",unsafe_allow_html=True)
 # Authentication
 
-username, role = login()
-
+user_id,username, role = login()
+print(username,role)
 if username:
     if  role == "admin":
         with st.sidebar :
@@ -618,7 +664,7 @@ if username:
 
             with tab1:
                 st.header("Content-Based Filtering")
-                selected_restaurant = st.selectbox('Pilih restoran yang Anda sukai:', places_to_eat['Nama Restoran'])
+                selected_restaurant = st.selectbox('Pilih restoran yang Anda sukai:', places_to_eat['nama_restoran'])
                 number_recommendation=st.number_input('Masukan jumlah data yang akan direkomendasi',value=10,min_value=1,max_value=10,key='content based filtering')
                 if st.button('rekomendasi',key='content based'):
                     recommendations_content = get_recommendations_content_based(selected_restaurant,number_recommendation)
@@ -633,7 +679,7 @@ if username:
                 if st.button('rekomendasi'):
                     if result_name.size == 0:
                         st.subheader(f"User dengan ID {user_id} tidak ditemukan.")
-                        rest_rect = pd.DataFrame(columns=["Nama Restoran", "Rating Anda"])
+                        rest_rect = pd.DataFrame(columns=["nama_restoran", "Rating Anda"])
                     else:
                         user_rated_restaurants = get_user_rated_restaurants(str(user_id),number_recommendation)
                         st.dataframe(user_rated_restaurants,use_container_width=True)
@@ -656,7 +702,7 @@ if username:
                         recommendations_item = get_recommendations_item_based(str(user_id),int(number_recommendation)) 
                                       
                         for row in recommendations_item.itertuples():
-                            with st.expander(f"Nama restoran {row[2]} dengan rating {row[3]}"):
+                            with st.expander(f"nama_restoran {row[2]} dengan rating {row[3]}"):
                                 # Rekomendasi content-based berdasarkan restoran yang dipilih dari item-based
                                 selected_from_item = row[2]
                                 content_based_recommendations = get_recommendations_content_based(selected_from_item,number_recommendation)
@@ -675,7 +721,7 @@ if username:
             st.subheader('evaluasi model ILS pada hybrid fitering filtering dan content based filtering')
             st.write('Intra-list similarity (ILS) adalah metrik evaluasi yang digunakan dalam sistem rekomendasi untuk mengukur kesamaan antara item-item yang direkomendasikan dalam daftar rekomendasi yang diberikan kepada pengguna.semakin tinggi nilai ILS maka semakin mirip daftar item rekomendasi yang diberikan dan semakin rendah nilai ils maka semakin beragan daftar item rekomendasi yang diberikan')
 
-            st.write('pengujian ILS yang dilakukan menggunakan "Variasi Makanan" yang dimiliki pada setiap item sebagai parameter kemiripan pada hasil daftar rekomendasi yang diberikan berikut merupakan tampilan matriks Variasi Makanan dari semua restoran berdasarkan restaurant_id')
+            st.write('pengujian ILS yang dilakukan menggunakan "variasi_makanan" yang dimiliki pada setiap item sebagai parameter kemiripan pada hasil daftar rekomendasi yang diberikan berikut merupakan tampilan matriks variasi_makanan dari semua restoran berdasarkan restaurant_id')
             matrix_var=matrix_variasi()
             st.write(matrix_var)
             eva_ils=evaluate_ils(user_id, num_recommendations_list,places_to_eat)
@@ -684,10 +730,8 @@ if username:
             plot_ils()
     else:
 
-        result_name = rating[rating['user_id'] == username]['nama'].unique()
-        
         with st.sidebar :
-            st.write(f'Selamat Datang {str(result_name[0])} 👋')
+            st.write(f'Selamat Datang {str(username)} 👋')
             authenticator.logout('Logout', 'main', key='user')
             user_menu=option_menu('user menu',['Restaurant','Rekomendation', 'User Rated'])
         
@@ -696,11 +740,11 @@ if username:
             
             col1,col2 = st.columns([0.7, 0.3])
             with col1:
-                option_restaurant = st.selectbox('Opsi pencarian', ["Restoran yang belum diberi rating"]+["Restoran paling populer"]+["Cari nama Restoran"]+all_restaurant,key='search all restaurant')
+                option_restaurant = st.selectbox('Opsi pencarian', ["Restoran yang belum diberi rating"]+["Restoran paling populer"]+["Cari nama_restoran"]+all_restaurant,key='search all restaurant')
                 # Tambahkan input untuk pencarian
-                if option_restaurant=="Cari nama Restoran":
+                if option_restaurant=="Cari nama_restoran":
                     restaurant_df= pd.DataFrame()
-                    search_query = st.text_input("Cari Nama Restoran", "")
+                    search_query = st.text_input("Cari nama_restoran", "")
                 else:
                     search_query=False
             with col2:
@@ -709,16 +753,16 @@ if username:
                     cols1,cols2 = st.columns(2)
                     with cols1 :
                         if st.button('save all ratings'):
-                            save_ratings(username, rating, places_to_eat, result_name)
+                            save_ratings(user_id, username)
                     with cols2 :
                         if st.button('delete all ratings'):
                             delete_rating('restaurant')
 
             # Filter hasil berdasarkan pencarian
             if search_query:
-                restaurant_df= unrated_restaurants[unrated_restaurants['Nama Restoran'].str.contains(search_query, case=False)]
-            elif option_restaurant not in ["Restoran yang belum diberi rating", "Restoran paling populer","Cari nama Restoran"]:
-                restaurant_df = unrated_restaurants[unrated_restaurants['Nama Restoran'] == option_restaurant]
+                restaurant_df= unrated_restaurants[unrated_restaurants['nama_restoran'].str.contains(search_query, case=False)]
+            elif option_restaurant not in ["Restoran yang belum diberi rating", "Restoran paling populer","Cari nama_restoran"]:
+                restaurant_df = unrated_restaurants[unrated_restaurants['nama_restoran'] == option_restaurant]
            
             if option_restaurant=="Restoran yang belum diberi rating":
                 # st.subheader(f"Restoran yang belum {str(result_name[0])} beri rating")
@@ -737,7 +781,7 @@ if username:
                             add_ratings(row, i, None,"restaurant")
             else:
                 if search_query=="":
-                    st.warning("Silahkan masukan nama Restoran",icon='🖊️')
+                    st.warning("Silahkan masukan nama_restoran",icon='🖊️')
                 elif not restaurant_df.empty:
                     for i, row in enumerate(restaurant_df.itertuples()):
                             cols1,cols2 = st.columns([0.8, 0.2])
@@ -750,7 +794,7 @@ if username:
             
         if user_menu=='Rekomendation':
             # Membuat daftar restoran
-            restaurant_names = places_to_eat['Nama Restoran'].values.tolist()
+            restaurant_names = places_to_eat['nama_restoran'].values.tolist()
             # Menambahkan pilihan 'None' di awal daftar
             data_loc=gif_load('restaurant')
 
@@ -764,17 +808,17 @@ if username:
                     cols1,cols2 = st.columns(2)
                     with cols1 :
                         if st.button('save all ratings'):
-                            save_ratings(username, rating, places_to_eat, result_name,"rekomendasi")
+                            save_ratings(user_id, username,"rekomendasi")
                     with cols2 :
                         if st.button('delete all ratings'):
                             delete_rating("rekomendasi")
             
             if selected_restaurant == 'Rekomendasi untuk kamu':
-                recommendations_item = get_recommendations_item_based(username,10)                
+                recommendations_item = get_recommendations_item_based(user_id,10)                
                 for i, row in enumerate(recommendations_item.itertuples()):
                     cols1,cols2 = st.columns([0.8, 0.2])
                     with cols1:
-                        with st.expander(f":knife_fork_plate: Nama restoran {row[2]} dengan rating {row[3]}"):
+                        with st.expander(f":knife_fork_plate: nama_restoran {row[2]} dengan rating {row[3]}"):
                             # Rekomendasi content-based berdasarkan restoran yang dipilih dari item-based
                             selected_from_item = row[2]
                             content_based_recommendations = get_recommendations_content_based(selected_from_item, 10)
@@ -792,7 +836,7 @@ if username:
                 for i,row in enumerate(recommendations_content.itertuples()):
                     cols1,cols2 = st.columns([0.8, 0.2])
                     with cols1:
-                        with st.expander(f":knife_fork_plate: Nama restoran {row[2]} dengan rating {row[3]}"):
+                        with st.expander(f":knife_fork_plate: nama_restoran {row[2]} dengan rating {row[3]}"):
                             # Rekomendasi content-based berdasarkan restoran yang dipilih dari item-based
                             selected_from_item = row[2]
                             content_based_recommendations = get_recommendations_content_based(selected_from_item,10)
@@ -807,20 +851,20 @@ if username:
                         add_ratings(row, i, None,"rekomendasi")
         
         if user_menu =='User Rated':
-            user_ratings =rating[rating['user_id'] == username]
-            rated_restaurants = user_ratings['Nama Restoran'].values.tolist()
-            user_rated = get_user_rated_restaurants(username,len(user_ratings))
-            if username not in pivot_table.index:
+            user_ratings =rating[rating['user_id'] == user_id]
+            rated_restaurants = user_ratings['nama_restoran'].values.tolist()
+            user_rated = get_user_rated_restaurants(user_id,len(user_ratings))
+            if user_id not in pivot_table.index:
                 st.subheader("belum ada data Restoran yang anda rating")
             else:
-                st.subheader(f"Restoran yang sudah pernah {result_name[0]}  beri rating:")
+                st.subheader(f"Restoran yang sudah pernah {username}  beri rating:")
                 cols1,cols2 = st.columns([0.7, 0.3])
                 with cols1:
-                    select_restaurant = st.selectbox('Opsi pencarian:', ["Semua Restoran yang anda rating"]+["Cari nama Restoran"]+rated_restaurants,key='search user rated')
+                    select_restaurant = st.selectbox('Opsi pencarian:', ["Semua Restoran yang anda rating"]+["Cari nama_restoran"]+rated_restaurants,key='search user rated')
                     # Tambahkan input untuk pencarian
-                    if select_restaurant=="Cari nama Restoran":
+                    if select_restaurant=="Cari nama_restoran":
                         user_rated_df=pd.DataFrame()
-                        search_query_rated = st.text_input("Cari Nama Restoran","")
+                        search_query_rated = st.text_input("Cari nama_restoran","")
                     else:
                         search_query_rated=False
                 with cols2:
@@ -829,20 +873,20 @@ if username:
                         cols1,cols2 = st.columns(2)
                         with cols1 :
                             if st.button('save all ratings'):
-                                save_ratings(username, rating, places_to_eat, result_name,"user_rated")
+                                save_ratings(user_id, username,"user_rated")
                         with cols2 :
                             if st.button('delete all ratings'):
                                 delete_rating("user_rated")
             
                 if search_query_rated:
-                    user_rated_df= user_rated[user_rated['Nama Restoran'].str.contains(search_query_rated, case=False)]
+                    user_rated_df= user_rated[user_rated['nama_restoran'].str.contains(search_query_rated, case=False)]
                 # Filter hasil berdasarkan pencarian
-                elif select_restaurant not in ["Semua Restoran yang anda rating","Cari nama Restoran"]:
-                    user_rated_df = user_rated[user_rated['Nama Restoran'] == select_restaurant]
+                elif select_restaurant not in ["Semua Restoran yang anda rating","Cari nama_restoran"]:
+                    user_rated_df = user_rated[user_rated['nama_restoran'] == select_restaurant]
                 # st.write('ini searc',search_query_rated)
                 if select_restaurant =="Semua Restoran yang anda rating":
                     for i,row in enumerate(user_rated.itertuples()):
-                        with st.expander(f" :knife_fork_plate: Nama restoran {row[2]} rating {row[3]}"):
+                        with st.expander(f" :knife_fork_plate: nama_restoran {row[2]} rating {row[3]}"):
                                 col1, col2 = st.columns(2)
                                 with col1:
                                     # Tombol untuk memicu konfirmasi penghapusan
@@ -855,10 +899,10 @@ if username:
                                     add_ratings(row, i, None,"user_rated")
                 else:                
                         if search_query_rated=="":
-                            st.warning("Silahkan masukan nama Restoran",icon='🖊️')
+                            st.warning("Silahkan masukan nama_restoran",icon='🖊️')
                         elif not user_rated_df.empty:
                             for i,row in enumerate(user_rated_df.itertuples()):
-                                with st.expander(f" :knife_fork_plate: Nama restoran {row[2]} rating {row[3]}"):
+                                with st.expander(f" :knife_fork_plate: nama_restoran {row[2]} rating {row[3]}"):
                                     col1, col2 = st.columns(2)
                                     with col1:
                                         # Tombol untuk memicu konfirmasi penghapusan
