@@ -262,7 +262,7 @@ def item_based_collaborative_filtering(user_id,num_recommendations):
         popular_restaurants = average_ratings.head(num_recommendations)
         
         pop_rest=list(zip(popular_restaurants['nama_restoran'], popular_restaurants['Average Rating']))
-        popular_rest = pd.DataFrame(pop_rest, columns=["nama_restoran", "Rating"])
+        popular_rest = pd.DataFrame(pop_rest, columns=["nama_restoran", "rating"])
         return popular_rest
     # Dapatkan item yang belum dirating oleh user_id
     rated_restaurants = ratings[ratings['user_id'] == user_id]['restaurant_id'].unique()
@@ -278,21 +278,22 @@ def item_based_collaborative_filtering(user_id,num_recommendations):
     recommendations = []
     for pred in top_predictions:
         restaurant_name = rating.loc[rating['restaurant_id'] == pred.iid, 'nama_restoran'].values[0]
-        recommendations.append({'restaurant_id':pred.iid,'nama_restoran': restaurant_name, 'Rating': pred.est})
+        recommendations.append({'restaurant_id':pred.iid,'nama_restoran': restaurant_name, 'rating': pred.est})
     recommendations=pd.DataFrame(recommendations)    
-    recommendations['Rating'] = recommendations['Rating'].round().clip(1, 5)
+    recommendations['rating'] = recommendations['rating'].round().clip(1, 5)
     return recommendations
 
 def get_recommendations_item_based(user_id, num_recommendations):
 
-    result_name = rating[rating['user_id'] == user_id]['nama'].unique()
-
+    result_name = rating[rating['user_id'] == str(user_id)]['nama'].unique()
+    
     if user_id not in pivot_table.index:
-        st.subheader(f"Sepertinya {result_name[0]} User baru berikut restaurant paling populer")
+        st.subheader(f"Sepertinya {result_name} User baru berikut restaurant paling populer")
         rest_rect=item_based_collaborative_filtering(user_id,num_recommendations)
         return rest_rect
     recommendations=item_based_collaborative_filtering(user_id,num_recommendations)
-    df_recommendations_item = pd.DataFrame(recommendations, columns=['restaurant_id',"nama_restoran", "Rating"])
+    st.write(recommendations)
+    df_recommendations_item = pd.DataFrame(recommendations, columns=['restaurant_id',"nama_restoran", "rating"])
     
     st.subheader(f"Rekomendasi restaurant untuk {result_name[0]}")
     return df_recommendations_item
@@ -305,15 +306,15 @@ def get_recommendations_hybrid(user_id,num_recommendations):
         restaurant_name = ratings.loc[ratings['user_id'] == user_id].sort_values('rating', ascending=False)['nama_restoran'].values[0]
     
     num_recommendations=num_recommendations//2
-    
+   
     content_rec=content_based_filtering(restaurant_name,num_recommendations)
     collab_rec=item_based_collaborative_filtering(user_id,num_recommendations)
-
-    recommendations_content = [(places_to_eat['restaurant_id'].iloc[i],places_to_eat['nama_restoran'].iloc[i], places_to_eat['rating_toko'].iloc[i], 'Content-based') for i in content_rec]
-    df_recommendations_content = pd.DataFrame(recommendations_content, columns=['restaurant_id',"nama_restoran", "Rating", "Metode"])
     
-    recommendations_item = [(rest['restaurant_id'],rest['nama_restoran'], rest['Rating'], 'Collaborative') for idx, rest in collab_rec.iterrows()]
-    df_recommendations_item = pd.DataFrame(recommendations_item, columns=['restaurant_id',"nama_restoran", "Rating", "Metode"])
+    recommendations_content = [(places_to_eat['restaurant_id'].iloc[i],places_to_eat['nama_restoran'].iloc[i], places_to_eat['rating_toko'].iloc[i], 'Content-based') for i in content_rec]
+    df_recommendations_content = pd.DataFrame(recommendations_content, columns=['restaurant_id',"nama_restoran", "rating", "Metode"])
+    
+    recommendations_item = [(rest['restaurant_id'],rest['nama_restoran'], rest['rating'], 'Collaborative') for idx, rest in collab_rec.iterrows()]
+    df_recommendations_item = pd.DataFrame(recommendations_item, columns=['restaurant_id',"nama_restoran", "rating", "Metode"])
     combined_recommendations = pd.concat([df_recommendations_content, df_recommendations_item]).drop_duplicates().reset_index(drop=True)
 
     return combined_recommendations
@@ -329,10 +330,11 @@ def intra_list_similarity(recommendations, feature_matrix):
     
     return avg_similarity
 
-def evaluate_ils(user_ids, num_recommendations, places_to_eat):
+def evaluate_ils(user, num_recommendations, places_to_eat):
     """Evaluasi Intra-List Similarity (ILS) untuk rekomendasi"""
     ils_results = []
     
+
     # Menghitung matrix fitur dari "variasi_makanan"
     exploded_foods = places_to_eat[['restaurant_id', 'variasi_makanan']].copy()
     exploded_foods['variasi_makanan'] = exploded_foods['variasi_makanan'].str.split(', ')
@@ -349,22 +351,24 @@ def evaluate_ils(user_ids, num_recommendations, places_to_eat):
         row_cbf = {'Metode': 'CBF', 'Num_Rec': num_rec}
         row_hybrid = {'Metode': 'Hybrid', 'Num_Rec': num_rec}
         
-        for user_id in user_ids:
-            recommendations = get_recommendations_hybrid(str(user_id), num_rec)
+        for username in user:
+            user_id = rating[rating['nama'] == str(username)]['user_id'].unique()
+
+            recommendations = get_recommendations_hybrid(str(user_id[0]), num_rec)
             
             # Content-Based Recommendations
             content_restaurants = recommendations[recommendations['Metode'] == 'Content-based']['restaurant_id'].tolist()
             content_ils = intra_list_similarity(content_restaurants, binary_matrix)
-            row_cbf[f'User_{user_id}'] = content_ils            
+            row_cbf[f'User_{username}'] = content_ils            
 
             # Hybrid Recommendations
             hybrid_restaurants = recommendations['restaurant_id'].tolist()
             hybrid_ils = intra_list_similarity(hybrid_restaurants, binary_matrix)
-            row_hybrid[f'User_{user_id}'] = hybrid_ils
+            row_hybrid[f'User_{username}'] = hybrid_ils
         
         # Hitung rata-rata ILS
-        row_cbf['Average'] = np.mean([row_cbf[f'User_{user_id}'] for user_id in user_ids])
-        row_hybrid['Average'] = np.mean([row_hybrid[f'User_{user_id}'] for user_id in user_ids])
+        row_cbf['Average'] = np.mean([row_cbf[f'User_{username}'] for username in user])
+        row_hybrid['Average'] = np.mean([row_hybrid[f'User_{username}'] for username in user])
 
         # Simpan hasil
         ils_results.append(row_cbf)
@@ -672,33 +676,29 @@ if username:
 
             with tab2:
                 st.header("Item-Based Collaborative Filtering")
-                user_id = st.number_input("masukan user id",value=50,key='colaborative filtering')
-                result_name = rating[rating['user_id'] == str(user_id)]['nama'].unique()
-
+                user = st.selectbox('Pilih user id:', rating['nama'].unique(),key='colaborative filtering')
+                user_id = rating[rating['nama'] == str(user)]['user_id'].unique()
+                
                 number_recommendation=st.number_input('Masukan jumlah data yang akan direkomendasi',value=10,min_value=1,max_value=10,key='item-based collaboorative filtering')
                 if st.button('rekomendasi'):
-                    if result_name.size == 0:
-                        st.subheader(f"User dengan ID {user_id} tidak ditemukan.")
-                        rest_rect = pd.DataFrame(columns=["nama_restoran", "Rating Anda"])
-                    else:
-                        user_rated_restaurants = get_user_rated_restaurants(str(user_id),number_recommendation)
-                        st.dataframe(user_rated_restaurants,use_container_width=True)
-                        recommendations_item = get_recommendations_item_based(str(user_id),number_recommendation)
-                        st.dataframe(recommendations_item,use_container_width=True)
+                    
+                    user_rated_restaurants = get_user_rated_restaurants(str(user_id[0]),number_recommendation)
+                    if user_rated_restaurants.size > 0:
+                        st.subheader(f'Restauran yang sudah dirating oleh {user}')
+                    st.dataframe(user_rated_restaurants,use_container_width=True)
+                    recommendations_item = get_recommendations_item_based(str(user_id[0]),number_recommendation)
+                    st.dataframe(recommendations_item,use_container_width=True)
             with tab3:
                 st.header("Hybrid Filtering")
                 
-                user_id = st.number_input("masukan user id",value=50)
+                user = st.selectbox('Pilih user id:', rating['nama'].unique(),key='hybrid filtering user select')
+                user_id = rating[rating['nama'] == str(user)]['user_id'].unique()
                 number_recommendation=st.number_input('Masukan jumlah data yang akan direkomendasi',value=10,min_value=2,max_value=20,key='hybrid filtering')
-                recommendation_hybrid=get_recommendations_hybrid(str(user_id),number_recommendation)
-                result_name = rating[rating['user_id'] == str(user_id)]['nama'].unique()
+                recommendation_hybrid=get_recommendations_hybrid(str(user_id[0]),number_recommendation)
                 
                 if st.button('rekomendasi',key='hybrid'):
                     
-                    if result_name.size == 0:
-                        st.subheader(f"User dengan ID {user_id} tidak ditemukan.")
-                    # st.dataframe(recommendation_hybrid,use_container_width=True)
-                    elif str(user_id) in pivot_table.index or str(user_id) not in pivot_table.index:
+                   if str(user_id) in pivot_table.index or str(user_id) not in pivot_table.index:
                         recommendations_item = get_recommendations_item_based(str(user_id),int(number_recommendation)) 
                                       
                         for row in recommendations_item.itertuples():
@@ -716,15 +716,16 @@ if username:
             st.dataframe(eval_mae)
             plot_MAE()
 
-            num_recommendations_list=[6,8,10]
-            user_id=[50,10,25]
             st.subheader('evaluasi model ILS pada hybrid fitering filtering dan content based filtering')
             st.write('Intra-list similarity (ILS) adalah metrik evaluasi yang digunakan dalam sistem rekomendasi untuk mengukur kesamaan antara item-item yang direkomendasikan dalam daftar rekomendasi yang diberikan kepada pengguna.semakin tinggi nilai ILS maka semakin mirip daftar item rekomendasi yang diberikan dan semakin rendah nilai ils maka semakin beragan daftar item rekomendasi yang diberikan')
 
             st.write('pengujian ILS yang dilakukan menggunakan "variasi_makanan" yang dimiliki pada setiap item sebagai parameter kemiripan pada hasil daftar rekomendasi yang diberikan berikut merupakan tampilan matriks variasi_makanan dari semua restoran berdasarkan restaurant_id')
+            angka_list = list(range(1, 11))
+            selected_users = st.multiselect("Pilih 3 User untuk Uji ILS:", rating["nama"].unique(),default=["Affan", "Afrien", "Alfian"], max_selections=3)
+            num_recommendations_list =  st.multiselect("Pilih hingga 3 angka:", angka_list,default=[3, 8, 10], max_selections=3)
             matrix_var=matrix_variasi()
             st.write(matrix_var)
-            eva_ils=evaluate_ils(user_id, num_recommendations_list,places_to_eat)
+            eva_ils=evaluate_ils(selected_users, num_recommendations_list,places_to_eat)
             st.write(f'berikut merupakan hasil pengujian ILS pada user {user_id}')
             st.dataframe(eva_ils)
             plot_ils()
