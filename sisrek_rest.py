@@ -496,7 +496,6 @@ def login():
             "password": row["password"],
             "role": row["role"]
         }
-    st.write("Data Credentials:", credentials["usernames"]) 
     global authenticator
     authenticator = stauth.Authenticate(
         credentials,
