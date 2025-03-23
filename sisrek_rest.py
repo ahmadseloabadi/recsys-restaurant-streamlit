@@ -651,10 +651,7 @@ st.write(f"<h4 style='text-align: center ;font-family: Arial, Helvetica, sans-se
 # Authentication
 
 authentication_status,user_id,username, role = login()
-st.write("authentication_status",authentication_status)
-st.write("user_id",user_id)
-st.write("username",username)
-st.write("role",role)
+
 
 if authentication_status:
     if  role == "admin":
