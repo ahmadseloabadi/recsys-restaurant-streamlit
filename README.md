@@ -17,8 +17,8 @@ Sistem ini juga memiliki fitur evaluasi **Mean Absolute Error (MAE)** untuk meng
 ### 1️⃣ **Clone Repository**
 
 ```bash
-git clone https://github.com/username/repo-name.git
-cd repo-name
+git https://github.com/ahmadseloabadi/recsys-restaurant-streamlit
+cd recsys-restaurant-streamlit
 ```
 
 ### 2️⃣ **Buat Virtual Environment** _(Opsional, tapi direkomendasikan)_
@@ -70,6 +70,22 @@ streamlit run sisrek_rest.py
 ├── 📄 .env  # Konfigurasi kredensial Supabase
 └── 📄 README.md  # Dokumentasi proyek ini
 ```
+
+---
+
+## 🔑 Contoh Login Admin dan User
+
+### **Admin Login:**
+
+- **Username:** `admin`
+- **Password:** `admin`
+
+### **User Login:**
+
+- **Username:** `user1`
+- **Password:** `user1`
+
+> **Catatan:** Password default dihasilkan sebagai `nama`. Jika ada perubahan, cek di database Supabase.
 
 ---
 
