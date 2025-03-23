@@ -3,7 +3,7 @@ import psycopg2
 import pandas as pd
 import uuid
 from dotenv import load_dotenv
-from py_bcrypt import hashpw, gensalt
+from bcrypt import hashpw, gensalt
 
 # Load environment variables
 load_dotenv()

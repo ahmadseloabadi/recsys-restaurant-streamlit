@@ -26,7 +26,7 @@ import plotly.express as px
 import time
 import base64
 
-from py_bcrypt import hashpw, gensalt, checkpw
+from bcrypt import hashpw, gensalt, checkpw
 from dotenv import load_dotenv
 
 def gif_load(filename):
