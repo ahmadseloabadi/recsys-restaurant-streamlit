@@ -503,9 +503,7 @@ def login():
     )
 
     user_id,authentication_status, username = authenticator.login(fields={"Username": "Username"})
-    print("user_id: ", user_id)
-    print("authentication_status: ", authentication_status)
-    print("username: ", username)
+
     if authentication_status:
         return authentication_status,credentials["usernames"][username]["user_id"] ,username, credentials["usernames"][username]["role"]
     elif authentication_status is False:
@@ -645,6 +643,10 @@ st.write(f"<h4 style='text-align: center ;font-family: Arial, Helvetica, sans-se
 # Authentication
 
 authentication_status,user_id,username, role = login()
+st.write("authentication_status",authentication_status)
+st.write("user_id",user_id)
+st.write("username",username)
+st.write("role",role)
 
 if authentication_status:
     if  role == "admin":
@@ -921,13 +923,8 @@ if authentication_status:
         if 'confirm_delete' in st.session_state :
             confirm_delete(st.session_state['confirm_delete'])
 
-elif authentication_status == False:
-    st.error('User ID atau password salah')
-    on = st.toggle("belum memiliki akun?")
-    if on:
-        register()
-elif authentication_status == None:
-    st.warning('Silakan masukkan User ID dan password Anda')
+else:
+    
     on = st.toggle("belum memiliki akun?")
     if on:
         register()
