@@ -10,5 +10,4 @@ pandas==2.2.3
 psycopg2_binary==2.9.10
 python-dotenv==1.0.1
 python_bcrypt==0.3.2
-bcrypt==3.2.0
-cffi
+
