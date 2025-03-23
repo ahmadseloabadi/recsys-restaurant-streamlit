@@ -484,12 +484,15 @@ def register():
 
 def login():
     users_df = load_users()
+    if users_df.empty:
+        st.error("Tidak dapat memuat data pengguna dari database!")
+        return None, None, None, None
     credentials = {"usernames": {}}
 
     for _, row in users_df.iterrows():
         credentials["usernames"][row["nama"]] = {
             "user_id": row["user_id"],
-            "nama": row["nama"],
+            "name": row["nama"],
             "password": row["password"],
             "role": row["role"]
         }
@@ -510,7 +513,7 @@ def login():
         if not user_data:
             st.error(f"User {username} tidak ditemukan dalam database!")
             st.stop()
-        return authentication_status,credentials["usernames"][username]["user_id"] ,username, credentials["usernames"][username]["role"]
+        return authentication_status,credentials["usernames"][username]["user_id"] ,credentials["usernames"][username]["name"], credentials["usernames"][username]["role"]
     elif authentication_status is False:
         st.error("Username atau password salah.")
     elif authentication_status is None:
