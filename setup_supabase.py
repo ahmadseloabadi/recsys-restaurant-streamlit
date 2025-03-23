@@ -64,6 +64,7 @@ def hash_password(password):
     return hashpw(password.encode(), gensalt()).decode()
 
 def upload_data():
+    print("uploading data...")
     conn = connect_db()
     cursor = conn.cursor()
     file_path = "data/dataset/restaurant_recommendation.xlsx"
@@ -90,12 +91,14 @@ def upload_data():
     ratings_df = ratings_df.dropna(subset=["user_id"])  # Hapus yang tidak berhasil dipetakan
     
     for _, row in users_df.iterrows():
+        print(row)
         cursor.execute("""
             INSERT INTO users (user_id, nama, password, role) VALUES (%s, %s, %s, %s)
             ON CONFLICT (user_id) DO NOTHING;
         """, (row["user_id"], row["nama"], row["password"], row["role"]))
     
     for _, row in places_to_eat_df.iterrows():
+        print(row)
         cursor.execute("""
             INSERT INTO places_to_eat (restaurant_id, nama_restoran, preferensi_makanan, harga_rata_rata, rating_toko,
                                       jenis_suasana, variasi_makanan, keramaian_restoran,
@@ -106,6 +109,7 @@ def upload_data():
                row["Disajikan atau Ambil Sendiri"], row["All You Can Eat atau Ala Carte"]))
     
     for _, row in ratings_df.iterrows():
+        print(row)
         if pd.isna(row["restaurant_id"]) and pd.isna(row["user_id"]):
             continue
         cursor.execute("""
