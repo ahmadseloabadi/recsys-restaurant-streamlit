@@ -403,10 +403,8 @@ def plot_ils(ils_results_df):
     with st.expander('kesimpulan'):
         st.write(f"kenaikan dan penurunan nilai rata-rata ILS menunjukan nilai keberagaman hasil rekomendasi yang di berikan suatu model , nilai ILS terendah didapatkan pada model {ILSvariant['Metode'].values} dengan jumlah item rekomendasi sebesar {ILSvariant['Num_Rec'].values} item rekomendasi dan  rata-rata nilai ILS sebesar {ILSvariant['Average'].values} yang manandakan variasi/keberagaman yang tinggi dalam hasil rekomendasi yang diberikan, dan sebaliknya nilai ILS tertinggi didapatkan pada model {ILSrelevan['Metode'].values} dengan jumlah item rekomendasi sebesar {ILSrelevan['Num_Rec'].values} item rekomendasi dan  rata-rata nilai ILS sebesar {ILSrelevan['Average'].values} yang manandakan relevansi/kemiripan yang tinggi dalam hasil rekomendasi yang diberikan.")
 
-def MAE_evaluation():
+def MAE_evaluation(k_values):
     # -----silahkan unkomen untuk melakuakn nilai MAE yang baru -----
-
-    k_values = [5, 7, 9, 10, 15, 20, 25]
 
     # DataFrame untuk menyimpan hasil pengujian
     results_df = pd.DataFrame(columns=['k', 'MAE'])
@@ -437,12 +435,12 @@ def MAE_evaluation():
     return results_df
 
 def plot_MAE(result_MAE):
-    st.write('Tampilan Grafik model evaluasi MAE Item-Based Collabborative filtering')
+    st.write("MAE adalah salah satu metode evaluasi yang umum digunakan dalam data science. MAE menghitung rata-rata dari selisih absolut antara nilai prediksi dan nilai aktual.Dengan kata lain, MAE menghitung berapa rata-rata kesalahan absolut dalam prediksi. Semakin kecil nilai MAE, semakin baik kualitas model tersebut.")
+    st.write('Tampilan Grafik model evaluasi MAE Item-Based Collabborative filtering pada tabel di atas dapat')
     result_MAE['MAE'] = result_MAE['MAE'].apply(lambda x: f'{x:.4f}')
     Kbest=result_MAE.loc[(result_MAE['MAE']==result_MAE['MAE'].min())]
     Kbad=result_MAE.loc[(result_MAE['MAE']==result_MAE['MAE'].max())]
-    
-    st.write(f'pada tabel di atas dapat')
+
     # Buat plot menggunakan plotly.express
     fig = px.line(result_MAE, x='k', y='MAE', title='Grafik MAE terhadap K', markers=True,text='MAE')
     fig.update_traces(textposition='top center')
@@ -450,7 +448,7 @@ def plot_MAE(result_MAE):
     # Tampilkan plot di Streamlit
     st.plotly_chart(fig)
 
-    st.write(f"Dari gambar dan tabel diatas kita dapat melihat pengujian nilai K dengan hasil MAE dan didapatkan nilai MAE paling terendah pada pengujian ke {Kbest.index.values} dengan nilai k sebesar {Kbest['k'].values[0]} dan nilai MAE sebesar {Kbest['MAE'].values[0]} sedangkan nilai k tertinggi di dapatkan pada pengujian ke {Kbad.index.values} dengan nilai k sebesar {Kbad['k'].values[0]} dan nilai MAE sebesar {Kbad['MAE'].values[0]} ,dapat di simpulkan semakin kecil nilai MAE semakain baik pula model machine learning yang buat")
+    st.write(f"Dari gambar dan tabel diatas kita dapat melihat pengujian nilai K dengan hasil MAE dan didapatkan nilai MAE paling terendah pada pengujian ke {Kbest.index.values + 1} dengan nilai k sebesar {Kbest['k'].values[0]} dan nilai MAE sebesar {Kbest['MAE'].values[0]} sedangkan nilai k tertinggi di dapatkan pada pengujian ke {Kbad.index.values + 1} dengan nilai k sebesar {Kbad['k'].values[0]} dan nilai MAE sebesar {Kbad['MAE'].values[0]} ,dapat di simpulkan semakin kecil nilai MAE semakain baik pula model machine learning yang buat")
 
 def register_user(nama, password):
     if check_user_exists(user_id):
@@ -710,7 +708,10 @@ if username:
 
         if admin_menu=='evaluasi':
             st.subheader('evaluasi model MAE pada item-based collaborative filtering')
-            eval_mae=MAE_evaluation()
+            angka_list = list(range(1, 26))
+            k_value =  st.multiselect("Pilih hingga 5 angka:", angka_list,default=[3, 5, 7,9,10], max_selections=5)
+
+            eval_mae=MAE_evaluation(k_value)
             st.dataframe(eval_mae)
             plot_MAE(eval_mae)
 
@@ -718,7 +719,7 @@ if username:
             st.write('Intra-list similarity (ILS) adalah metrik evaluasi yang digunakan dalam sistem rekomendasi untuk mengukur kesamaan antara item-item yang direkomendasikan dalam daftar rekomendasi yang diberikan kepada pengguna.semakin tinggi nilai ILS maka semakin mirip daftar item rekomendasi yang diberikan dan semakin rendah nilai ils maka semakin beragan daftar item rekomendasi yang diberikan')
 
             st.write('pengujian ILS yang dilakukan menggunakan "variasi_makanan" yang dimiliki pada setiap item sebagai parameter kemiripan pada hasil daftar rekomendasi yang diberikan berikut merupakan tampilan matriks variasi_makanan dari semua restoran berdasarkan restaurant_id')
-            angka_list = list(range(1, 11))
+            
             selected_users = st.multiselect("Pilih 3 User untuk Uji ILS:", rating["nama"].unique(),default=["Affan", "Afrien", "Alfian"], max_selections=3)
             num_recommendations_list =  st.multiselect("Pilih hingga 3 angka:", angka_list,default=[3, 8, 10], max_selections=3)
             matrix_var=matrix_variasi()
