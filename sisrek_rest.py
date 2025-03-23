@@ -376,13 +376,12 @@ def evaluate_ils(user, num_recommendations, places_to_eat):
 
     # Simpan hasil evaluasi ke CSV
     ils_results_df = pd.DataFrame(ils_results)
-    ils_results_df.to_csv("data/evaluation/eval_ils_new.csv", index=False)
+    # ils_results_df.to_csv("data/evaluation/eval_ils_new.csv", index=False)
 
     return ils_results_df
 
-def plot_ils():
+def plot_ils(ils_results_df):
     # Baca data dari CSV
-    ils_results_df = pd.read_csv("data/evaluation/eval_ils_new.csv")
     
     ils_results_df['Average'] = ils_results_df['Average'].apply(lambda x: f'{x:.4f}')
     # Plot
@@ -433,13 +432,12 @@ def MAE_evaluation():
     
         # Tambahkan hasil pengujian ke DataFrame
         results_df = pd.concat([results_df, pd.DataFrame({'k': [nilai_k], 'MAE': [mae]})], ignore_index=True)
-    results_df.to_csv("data/evaluation/eval_k_new.csv",index=False)
-    results_df = pd.read_csv("data/evaluation/eval_k_new.csv")
+    # results_df.to_csv("data/evaluation/eval_k_new.csv",index=False)
+    # results_df = pd.read_csv("data/evaluation/eval_k_new.csv")
     return results_df
 
-def plot_MAE():
+def plot_MAE(result_MAE):
     st.write('Tampilan Grafik model evaluasi MAE Item-Based Collabborative filtering')
-    result_MAE = pd.read_csv("data/evaluation/eval_k_new.csv")
     result_MAE['MAE'] = result_MAE['MAE'].apply(lambda x: f'{x:.4f}')
     Kbest=result_MAE.loc[(result_MAE['MAE']==result_MAE['MAE'].min())]
     Kbad=result_MAE.loc[(result_MAE['MAE']==result_MAE['MAE'].max())]
@@ -598,7 +596,7 @@ def get_ratings_id(username,nama_restoran):
 def delete_user_rating(username, restaurant_name):
     # Cari indeks rating yang cocok di DataFrame
     id = get_ratings_id(username,restaurant_name)
-    print("id =",id)
+    
     if id :
         conn = connect_db()
         cursor = conn.cursor()
@@ -648,7 +646,7 @@ st.write(f"<h4 style='text-align: center ;font-family: Arial, Helvetica, sans-se
 # Authentication
 
 user_id,username, role = login()
-print(username,role)
+
 if username:
     if  role == "admin":
         with st.sidebar :
@@ -714,7 +712,7 @@ if username:
             st.subheader('evaluasi model MAE pada item-based collaborative filtering')
             eval_mae=MAE_evaluation()
             st.dataframe(eval_mae)
-            plot_MAE()
+            plot_MAE(eval_mae)
 
             st.subheader('evaluasi model ILS pada hybrid fitering filtering dan content based filtering')
             st.write('Intra-list similarity (ILS) adalah metrik evaluasi yang digunakan dalam sistem rekomendasi untuk mengukur kesamaan antara item-item yang direkomendasikan dalam daftar rekomendasi yang diberikan kepada pengguna.semakin tinggi nilai ILS maka semakin mirip daftar item rekomendasi yang diberikan dan semakin rendah nilai ils maka semakin beragan daftar item rekomendasi yang diberikan')
@@ -728,7 +726,7 @@ if username:
             eva_ils=evaluate_ils(selected_users, num_recommendations_list,places_to_eat)
             st.write(f'berikut merupakan hasil pengujian ILS pada user {user_id}')
             st.dataframe(eva_ils)
-            plot_ils()
+            plot_ils(eva_ils)
     else:
 
         with st.sidebar :
