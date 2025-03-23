@@ -489,11 +489,11 @@ def login():
     for _, row in users_df.iterrows():
         credentials["usernames"][row["nama"]] = {
             "user_id": row["user_id"],
-            "name": row["nama"],
+            "nama": row["nama"],
             "password": row["password"],
             "role": row["role"]
         }
-
+    st.write("Data Credentials:", credentials["usernames"]) 
     global authenticator
     authenticator = stauth.Authenticate(
         credentials,
@@ -502,9 +502,14 @@ def login():
         cookie_expiry_days=30
     )
 
-    user_id,authentication_status, username = authenticator.login(fields={"Username": "Username"})
+    name,authentication_status, username = authenticator.login(fields={"Username": "Username"})
 
     if authentication_status:
+        user_data = credentials["usernames"].get(username)
+
+        if not user_data:
+            st.error(f"User {username} tidak ditemukan dalam database!")
+            st.stop()
         return authentication_status,credentials["usernames"][username]["user_id"] ,username, credentials["usernames"][username]["role"]
     elif authentication_status is False:
         st.error("Username atau password salah.")
