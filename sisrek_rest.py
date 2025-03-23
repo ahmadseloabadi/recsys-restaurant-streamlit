@@ -206,9 +206,9 @@ def content_prepro(restaurant):#bagian data preprocessing pada content based fil
     st.dataframe(matrix)
 
     #save data to csv
-    text_prepro_tfidf.to_csv("data/prepro/item-user-CF.csv",index=False)
-    matrix.to_csv("data/prepro/similarity-CBF.csv",index=False)
-    restaurant_features.to_csv("data/prepro/restaurant-feat-CBF.csv",index=False)
+    # text_prepro_tfidf.to_csv("data/prepro/item-user-CF.csv",index=False)
+    # matrix.to_csv("data/prepro/similarity-CBF.csv",index=False)
+    # restaurant_features.to_csv("data/prepro/restaurant-feat-CBF.csv",index=False)
 
 @st.cache_data
 def collab_prepro(rating): 
@@ -218,7 +218,7 @@ def collab_prepro(rating):
     st.dataframe(ratings)
     st.write('Tampilan item user matrix')
     st.dataframe(pivot_tables.T)
-    pivot_tables.T.to_csv("data/prepro/item-user-CF.csv",index=False)
+    # pivot_tables.T.to_csv("data/prepro/item-user-CF.csv",index=False)
     # Dapatkan matriks similarity antar item dari model
     item_similarity_matrix = algo.sim
     # Konversi matriks similarity ke array NumPy
@@ -227,7 +227,7 @@ def collab_prepro(rating):
     # Ganti nilai None dengan 0
     datamatriks = datamatriks.fillna(0)
     matrix=datamatriks.head(100)
-    matrix.to_csv("data/prepro/similarity-CF.csv",index=False)
+    # matrix.to_csv("data/prepro/similarity-CF.csv",index=False)
     # Tampilkan matriks similarity
     st.write("Tampilan Matriks Similarity Antar Item:")
     st.dataframe(matrix)
