@@ -645,7 +645,7 @@ st.write(f"<h4 style='text-align: center ;font-family: Arial, Helvetica, sans-se
 
 user_id,username, role = login()
 
-if username:
+if user_id:
     if  role == "admin":
         with st.sidebar :
             st.subheader(f'Selamat Datang ADMIN 👋')
