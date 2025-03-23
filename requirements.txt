@@ -10,5 +10,5 @@ scikit-surprise --prefer-binary
 streamlit==1.40.0
 streamlit_authenticator==0.3.2
 streamlit_option_menu==0.3.2
-bcrypt==4.0.1
+bcrypt==3.2.2
 
