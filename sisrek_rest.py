@@ -502,16 +502,17 @@ def login():
         cookie_expiry_days=30
     )
 
-    name,authentication_status, username = authenticator.login(fields={"Username": "Username"})
-
+    user_id,authentication_status, username = authenticator.login(fields={"Username": "Username"})
+    print("user_id: ", user_id)
+    print("authentication_status: ", authentication_status)
+    print("username: ", username)
     if authentication_status:
-        user_id = credentials["usernames"][username]["user_id"]  # Ambil user_id
-        return user_id,username, credentials["usernames"][username]["role"]
+        return authentication_status,credentials["usernames"][username]["user_id"] ,username, credentials["usernames"][username]["role"]
     elif authentication_status is False:
         st.error("Username atau password salah.")
     elif authentication_status is None:
         st.warning("Silakan masukkan Username dan password Anda.")
-    return None,None, None
+    return None,None,None, None
 
 # @st.experimental_fragment
 def add_ratings(baris, i, j, menu):
@@ -643,9 +644,9 @@ def restaurant_data():
 st.write(f"<h4 style='text-align: center ;font-family: Arial, Helvetica, sans-serif;font-size: 34px;word-spacing: 2px;color: #000000;font-weight: 700;' >Sistem Rekomendasi Restoran di Jogja </h4>",unsafe_allow_html=True)
 # Authentication
 
-user_id,username, role = login()
+authentication_status,user_id,username, role = login()
 
-if user_id:
+if authentication_status:
     if  role == "admin":
         with st.sidebar :
             st.subheader(f'Selamat Datang ADMIN 👋')
@@ -920,8 +921,14 @@ if user_id:
         if 'confirm_delete' in st.session_state :
             confirm_delete(st.session_state['confirm_delete'])
 
-else:
-    on = st.toggle("Belum memiliki akun?")
+elif authentication_status == False:
+    st.error('User ID atau password salah')
+    on = st.toggle("belum memiliki akun?")
+    if on:
+        register()
+elif authentication_status == None:
+    st.warning('Silakan masukkan User ID dan password Anda')
+    on = st.toggle("belum memiliki akun?")
     if on:
         register()
 
