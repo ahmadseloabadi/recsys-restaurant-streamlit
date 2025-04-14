@@ -159,78 +159,138 @@ def matrix_variasi():
 
 @st.cache_data
 def content_prepro(restaurant):#bagian data preprocessing pada content based filtering
-    #menghapus kolom yang tidak di gunakan
-    st.write('Tampilan dataset Restaurant')
-    st.dataframe(restaurant)
-    restaurant.drop(columns=["harga_rata_rata","keramaian_restoran",'disajikan_atau_ambil_sendiri','all_you_can_eat_atau_ala_carte'],axis=1,inplace=True)
-    st.write('menghapus beberapa kolom yang tidak di gunakan seperti "harga_rata_rata","keramaian_restoran","disajikan_atau_ambil_sendiri","all_you_can_eat_atau_ala_carte",sehingga tamilan dataset restaurant sebagai berikut')
+    # Penjelasan metode Content-Based Filtering
+    st.subheader("🔍 Penjelasan Metode Content-Based Filtering")
+    st.write('''
+    Content-Based Filtering adalah metode sistem rekomendasi yang memberikan saran berdasarkan kemiripan atribut atau fitur dari item (dalam hal ini restoran) yang disukai oleh pengguna.
+
+    **Cara kerjanya:**
+    1. Sistem menganalisis karakteristik dari restoran (misalnya: preferensi makanan, jenis suasana, variasi makanan).
+    2. Kemudian membandingkan dengan preferensi pengguna sebelumnya.
+    3. Hasil rekomendasi adalah restoran yang memiliki fitur serupa dengan yang pernah disukai oleh pengguna.
+    ''')
+
+    # Menampilkan dataset awal
+    st.subheader("📊 Dataset Awal")
+    st.write("Dataset yang digunakan berasal dari Kaggle: [Places to Eat in the Jogja Region](https://www.kaggle.com/datasets/yudhaislamisulistya/places-to-eat-in-the-jogja-region)")
+    st.write('Berikut adalah tampilan awal dataset restoran sebelum dilakukan preprocessing:')
     st.dataframe(restaurant)
 
+    # Menghapus kolom yang tidak relevan
+    restaurant.drop(columns=["harga_rata_rata", "keramaian_restoran", "disajikan_atau_ambil_sendiri", "all_you_can_eat_atau_ala_carte"], axis=1, inplace=True)
+
+    st.subheader("🧹 Menghapus Kolom Tidak Relevan")
+    st.write('''
+    Beberapa kolom dihapus karena tidak digunakan dalam proses perhitungan kemiripan item, yaitu:
+    - `harga_rata_rata`
+    - `keramaian_restoran`
+    - `disajikan_atau_ambil_sendiri`
+    - `all_you_can_eat_atau_ala_carte`
+
+    Berikut tampilan dataset setelah kolom tersebut dihapus:
+    ''')
+    st.dataframe(restaurant)
+
+    # Membuat kolom gabungan fitur
     restaurant['Features'] = restaurant['preferensi_makanan'] + " " + restaurant['jenis_suasana'] + " " + restaurant['variasi_makanan']
 
-    st.write('Tampilan fitur yang di gunakan pada metode content based filtering')
-    restaurant_features=restaurant[['preferensi_makanan','jenis_suasana','variasi_makanan','Features']]
+    st.subheader("🛠️ Membuat Kolom Gabungan Fitur")
+    st.write('''
+    Untuk menghitung kemiripan antar restoran, dibuat kolom `Features` yang merupakan gabungan dari beberapa atribut penting yaitu:
+    - `preferensi_makanan`
+    - `jenis_suasana`
+    - `variasi_makanan`
+
+    Kolom ini akan menjadi dasar dalam proses pembobotan menggunakan TF-IDF.
+    ''')
+    restaurant_features = restaurant[['preferensi_makanan', 'jenis_suasana', 'variasi_makanan', 'Features']]
     st.dataframe(restaurant_features)
 
-    restaurant['prepro_Features']=restaurant['Features'].apply(clean_text)
-    # Transformasi content_preprocessing menggunakan TF-IDF
+    # Preprocessing teks
+    restaurant['prepro_Features'] = restaurant['Features'].apply(clean_text)
+
+    # TF-IDF Vectorization
     tfidf = tfidf_vectorizer.fit_transform(restaurant['Features'])
 
-    # Mendapatkan daftar kata yang digunakan dalam TF-IDF
+    # Mendapatkan daftar kata dari TF-IDF
     feature_names = tfidf_vectorizer.get_feature_names_out()
-    # Membuat DataFrame kosong untuk menyimpan nilai TF-IDF
     tfidf_df = pd.DataFrame(columns=['TF-IDF'])
 
-    # Mengisi DataFrame dengan nilai TF-IDF yang tidak nol
+    # Mengisi DataFrame dengan nilai TF-IDF non-zero
     for i, doc in enumerate(restaurant['prepro_Features']):
         doc_tfidf = tfidf[i]
         non_zero_indices = doc_tfidf.nonzero()[1]
         tfidf_values = doc_tfidf[0, non_zero_indices].toarray()[0]
         tfidf_dict = {feature_names[idx]: tfidf_values[j] for j, idx in enumerate(non_zero_indices)}
         tfidf_df.loc[i] = [' '.join(f'({feature_name}, {tfidf_dict[feature_name]:.3f})' for feature_name in tfidf_dict)]
-    cosine_sim = cosine_similarity(tfidf)
-    # Menggabungkan DataFrame hasil dengan DataFrame utama
+
+    # Menggabungkan hasil TF-IDF ke dataset utama
     restaurant = pd.concat([restaurant, tfidf_df], axis=1)
-    st.write('Tampilan hasil text preprocessing dan pembobotan TF-IDF')
-    text_prepro_tfidf=restaurant[['Features','prepro_Features','TF-IDF']]
+
+    st.subheader("🧪 Preprocessing & Pembobotan TF-IDF")
+    st.write('''
+    Setelah teks dibersihkan, fitur dikonversi menjadi representasi numerik menggunakan TF-IDF (Term Frequency - Inverse Document Frequency).  
+    TF-IDF membantu sistem mengenali seberapa penting suatu kata dalam sebuah restoran dibandingkan dengan restoran lainnya.
+
+    Berikut adalah hasil preprocessing teks dan pembobotan TF-IDF untuk masing-masing restoran:
+    ''')
+    text_prepro_tfidf = restaurant[['Features', 'prepro_Features', 'TF-IDF']]
     st.dataframe(text_prepro_tfidf)
 
-    # Konversi matriks similarity ke array NumPy
+    # Menghitung cosine similarity antar item
+    cosine_sim = cosine_similarity(tfidf)
     item_similarity_matrix_array = np.array(cosine_sim)
+    datamatriks = pd.DataFrame(item_similarity_matrix_array)
+    matrix = datamatriks.head(100)
 
-    datamatriks=pd.DataFrame(item_similarity_matrix_array)
-    matrix=datamatriks.head(100)
+    st.subheader("📐 Matriks Similarity antar Restoran")
+    st.write('''
+    Setelah fitur dikonversi menjadi vektor, digunakan metode **cosine similarity** untuk mengukur kemiripan antar restoran.  
+    Semakin tinggi nilainya (mendekati 1), semakin mirip restoran tersebut satu sama lain berdasarkan fitur yang dianalisis.
 
-    # Tampilkan matriks similarity
-    st.write("Tampilan Matriks Similarity Antar Item:")
+    Berikut adalah cuplikan matriks similarity dari 100 restoran pertama:
+    ''')
     st.dataframe(matrix)
 
-    #save data to csv
-    # text_prepro_tfidf.to_csv("data/prepro/item-user-CF.csv",index=False)
-    # matrix.to_csv("data/prepro/similarity-CBF.csv",index=False)
-    # restaurant_features.to_csv("data/prepro/restaurant-feat-CBF.csv",index=False)
 
 @st.cache_data
 def collab_prepro(rating): 
-    #bagian data preprocessing pada collaborative filtering
-    st.write('Tampilan dataset rating ')
+    # 📥 Menampilkan dataset rating
+    st.subheader("📊 Dataset Rating Pengguna")
+    st.write('''
+    Dataset ini berisi informasi rating yang diberikan oleh pengguna terhadap restoran.  
+    Dataset ini akan digunakan untuk membangun *Item-Based Collaborative Filtering* dengan menggunakan matriks user-item.
+    ''')
     ratings = pd.DataFrame(rating)
     st.dataframe(ratings)
-    st.write('Tampilan item user matrix')
+
+    # 🧱 Menampilkan matriks user-item (pivot)
+    st.subheader("📐 Matriks User-Item (Pivot Table)")
+    st.write('''
+    Matriks ini menunjukkan nilai rating yang diberikan oleh setiap pengguna terhadap restoran.  
+    Matriks ini merupakan dasar untuk menghitung kemiripan antar item (restoran) menggunakan pendekatan collaborative filtering.
+    ''')
     st.dataframe(pivot_tables.T)
-    # pivot_tables.T.to_csv("data/prepro/item-user-CF.csv",index=False)
-    # Dapatkan matriks similarity antar item dari model
-    item_similarity_matrix = algo.sim
-    # Konversi matriks similarity ke array NumPy
+
+    # 🔗 Menghitung matriks similarity antar item
+    item_similarity_matrix = algo.sim  # Ambil matriks similarity dari model collaborative filtering
     item_similarity_matrix_array = np.array(item_similarity_matrix)
-    datamatriks=pd.DataFrame(item_similarity_matrix_array)
-    # Ganti nilai None dengan 0
+    datamatriks = pd.DataFrame(item_similarity_matrix_array)
+
+    # Ganti nilai None (jika ada) dengan 0 untuk menghindari error dalam visualisasi
     datamatriks = datamatriks.fillna(0)
-    matrix=datamatriks.head(100)
-    # matrix.to_csv("data/prepro/similarity-CF.csv",index=False)
-    # Tampilkan matriks similarity
-    st.write("Tampilan Matriks Similarity Antar Item:")
+    matrix = datamatriks.head(100)
+
+    # 📏 Menampilkan matriks similarity antar restoran
+    st.subheader("🤝 Matriks Similarity Antar Restoran (Collaborative Filtering)")
+    st.write('''
+    Berikut adalah cuplikan dari matriks kemiripan antar item (restoran) yang dihitung berdasarkan rating dari pengguna.  
+    Metode ini menggunakan pendekatan **Item-Based Collaborative Filtering**, di mana restoran yang mirip ditentukan berdasarkan pola rating dari pengguna.
+
+    Nilai kemiripan menggunakan skala dari 0 hingga 1, di mana nilai yang lebih tinggi menunjukkan tingkat kemiripan yang lebih besar.
+    ''')
     st.dataframe(matrix)
+
 
 def get_user_rated_restaurants(user_id,num_recommendations): #bagian menampilkanr restoran yg sudah di rating user
     if user_id not in pivot_table.index:
@@ -659,11 +719,11 @@ if authentication_status:
             authenticator.logout('Logout', 'sidebar', key='admin')
             admin_menu=option_menu('Sistem Rekomendasi',['data preprocessing', 'prediksi', 'evaluasi'])
         if admin_menu=='data preprocessing':
-            st.subheader('Content Based Filtering')
+            st.header('Content Based Filtering')
             content_prepro(restaurant)
             # st.write('tampilan dataset merge ')
             # st.dataframe)
-            st.subheader('Item-Based Collaborative Filtering')
+            st.header('Item-Based Collaborative Filtering')
             collab_prepro(rating)
             
         if admin_menu=='prediksi':
