@@ -10,6 +10,8 @@ Proyek ini adalah sistem rekomendasi restoran berbasis web yang dikembangkan men
 Sistem ini juga memiliki fitur evaluasi **Intra-List Similarity (ILS)** untuk menilai keanekaragaman rekomendasi yang dihasilkan.
 Sistem ini juga memiliki fitur evaluasi **Mean Absolute Error (MAE)** untuk mengukur rata-rata kesalahan absolut antara nilai aktual dan prediksi.
 
+sumber dataset : [kaggle](https://www.kaggle.com/datasets/yudhaislamisulistya/places-to-eat-in-the-jogja-region)
+
 ---
 
 ## ⚙️ Instalasi dan Konfigurasi
