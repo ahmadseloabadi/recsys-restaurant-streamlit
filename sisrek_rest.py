@@ -792,7 +792,7 @@ if authentication_status:
         with st.sidebar :
             st.write(f'Selamat Datang {str(username)} 👋')
             authenticator.logout('Logout', 'main', key='user')
-            user_menu=option_menu('user menu',['Restaurant','Rekomendation', 'User Rated'])
+            user_menu=option_menu('user menu',['Restaurant','Rekomendasi', 'Rating Pengguna'])
         
         if user_menu=='Restaurant':
             all_restaurant,popular_rest,unrated_restaurants=restaurant_data()
@@ -851,7 +851,7 @@ if authentication_status:
                 else:
                     st.error("Maaf, restoran yang Anda cari tidak ditemukan. Silakan periksa pencarian anda dan coba lagi",icon='😔')
             
-        if user_menu=='Rekomendation':
+        if user_menu=='Rekomendasi':
             # Membuat daftar restoran
             restaurant_names = places_to_eat['nama_restoran'].values.tolist()
             col1,col2 = st.columns([0.7, 0.3])
@@ -905,7 +905,7 @@ if authentication_status:
                     with cols2:
                         add_ratings(row, i, None,"rekomendasi")
         
-        if user_menu =='User Rated':
+        if user_menu =='Rating Pengguna':
             user_ratings =rating[rating['user_id'] == user_id]
             rated_restaurants = user_ratings['nama_restoran'].values.tolist()
             user_rated = get_user_rated_restaurants(user_id,len(user_ratings))
