@@ -717,7 +717,7 @@ if authentication_status:
         with st.sidebar :
             st.subheader(f'Selamat Datang ADMIN 👋')
             authenticator.logout('Logout', 'sidebar', key='admin')
-            admin_menu=option_menu('Sistem Rekomendasi',['data preprocessing', 'prediksi', 'evaluasi'])
+            admin_menu=option_menu('Sistem Rekomendasi',['data preprocessing', 'pengujian', 'evaluasi'])
         if admin_menu=='data preprocessing':
             st.header('Content Based Filtering')
             content_prepro(restaurant)
@@ -726,7 +726,7 @@ if authentication_status:
             st.header('Item-Based Collaborative Filtering')
             collab_prepro(rating)
             
-        if admin_menu=='prediksi':
+        if admin_menu=='pengujian':
             tab1, tab2 ,tab3= st.tabs(["Content-Based Filtering", "Item-Based Collaborative Filtering","hybrid filtering"])
 
             with tab1:
@@ -762,7 +762,7 @@ if authentication_status:
                 if st.button('rekomendasi',key='hybrid'):
                     
                    if str(user_id) in pivot_table.index or str(user_id) not in pivot_table.index:
-                        recommendations_item = get_recommendations_item_based(str(user_id),int(number_recommendation)) 
+                        recommendations_item = get_recommendations_item_based(str(user_id[0]),int(number_recommendation)) 
                                       
                         for row in recommendations_item.itertuples():
                             with st.expander(f"nama_restoran {row[2]} dengan rating {row[3]}"):
@@ -836,14 +836,14 @@ if authentication_status:
                 for i, row in enumerate(unrated_restaurants.itertuples()):
                         cols1,cols2 = st.columns([0.8, 0.2])
                         with cols1:
-                            st.info(f" {row[2]} - Rating: {row[3]}",icon="🍽️")
+                            st.info(f" {row[1]} - Rating: {row[2]}",icon="🍽️")
                         with cols2:
                             add_ratings(row, i, None,"restaurant")
             elif option_restaurant=="Restoran paling populer":
                 for i, row in enumerate(popular_rest.itertuples()):
                         cols1,cols2 = st.columns([0.8, 0.2])
                         with cols1:
-                            st.info(f" {row[2]} - Rating: {row[3]}",icon="🍽️")
+                            st.info(f" {row[1]} - Rating: {row[2]}",icon="🍽️")
                         with cols2:
                             add_ratings(row, i, None,"restaurant")
             else:
