@@ -352,7 +352,6 @@ def get_recommendations_item_based(user_id, num_recommendations):
         rest_rect=item_based_collaborative_filtering(user_id,num_recommendations)
         return rest_rect
     recommendations=item_based_collaborative_filtering(user_id,num_recommendations)
-    st.write(recommendations)
     df_recommendations_item = pd.DataFrame(recommendations, columns=['restaurant_id',"nama_restoran", "rating"])
     
     st.subheader(f"Rekomendasi restaurant untuk {result_name[0]}")
