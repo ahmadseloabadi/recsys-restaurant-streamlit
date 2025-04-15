@@ -869,7 +869,7 @@ if authentication_status:
                             delete_rating("rekomendasi")
             
             if selected_restaurant == 'Rekomendasi untuk kamu':
-                recommendations_item = get_recommendations_item_based(user_id,10)                
+                recommendations_item = get_recommendations_item_based(str(user_id[0]),10)                
                 for i, row in enumerate(recommendations_item.itertuples()):
                     cols1,cols2 = st.columns([0.8, 0.2])
                     with cols1:
