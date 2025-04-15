@@ -29,14 +29,7 @@ import base64
 from bcrypt import hashpw, gensalt, checkpw
 from dotenv import load_dotenv
 
-def gif_load(filename):
-    file_ = open(f"data/img/{filename}.gif", "rb")
-    contents = file_.read()
-    data_url = base64.b64encode(contents).decode("utf-8")
-    file_.close()
-    return data_url
-data_loc=gif_load('icon')
-st.set_page_config(page_title="restaurant recomendation", page_icon=f"data:image/gif;base64,{data_loc}")
+st.set_page_config(page_title="restaurant recomendation")
 
 @st.cache_resource
 def download_stopwords():
@@ -861,10 +854,6 @@ if authentication_status:
         if user_menu=='Rekomendation':
             # Membuat daftar restoran
             restaurant_names = places_to_eat['nama_restoran'].values.tolist()
-            # Menambahkan pilihan 'None' di awal daftar
-            data_loc=gif_load('restaurant')
-
-            st.markdown(f'<img src="data:image/gif;base64,{data_loc}" alt="restaurant gif" style="width:704px; height:300px">',unsafe_allow_html=True,)
             col1,col2 = st.columns([0.7, 0.3])
             with col1:
                 selected_restaurant = st.selectbox('Pilih restoran yang Anda sukai:', ["Rekomendasi untuk kamu"]+restaurant_names,key='serach on rekomendation')
