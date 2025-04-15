@@ -828,7 +828,7 @@ if authentication_status:
                 for i, row in enumerate(unrated_restaurants.itertuples()):
                         cols1,cols2 = st.columns([0.8, 0.2])
                         with cols1:
-                            st.info(f" {row[1]} - Rating: {row[2]}",icon="🍽️")
+                            st.info(f" {row[2]} - Rating: {row[3]}",icon="🍽️")
                         with cols2:
                             add_ratings(row, i, None,"restaurant")
             elif option_restaurant=="Restoran paling populer":
